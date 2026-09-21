@@ -1,0 +1,17 @@
+{
+  "name": "yattu-bhaa-relay",
+  "version": "0.1.0",
+  "description": "Blind relay for Yattu Bhaa: pipes opaque bytes between the two paired phones in a room. Never sees plaintext.",
+  "type": "module",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test test/"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

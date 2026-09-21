@@ -1,0 +1,21 @@
+# Fly.io settings for the relay. UNTESTED: I have not run this against Fly.io.
+# Change `app` to a name nobody else has, then follow docs/SETUP-RELAY.md.
+
+app = "yattu-relay"
+primary_region = "lhr"          # Mumbai. Pick the region closest to your grandad.
+
+[build]                         # empty: build from the Dockerfile in this folder
+
+[env]
+  TRUST_PROXY = "1"             # so the per-address connection limit sees real addresses
+
+[http_service]
+  internal_port = 8787
+  force_https = true
+  auto_stop_machines = "off"    # keep it running: it holds who is connected in memory
+  auto_start_machines = false
+  min_machines_running = 1
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
