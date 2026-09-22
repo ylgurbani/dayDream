@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.yattubhaa.app.net.ProtocolTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-09-21T22:19:58" hostname="Yashwants-MacBook-Pro.local" time="0.014">
+  <properties/>
+  <testcase name="wrongLengthsAndUnknownValuesAreRejected" classname="com.yattubhaa.app.net.ProtocolTest" time="0.003"/>
+  <testcase name="outOfRangeCoordinatesAreRejected" classname="com.yattubhaa.app.net.ProtocolTest" time="0.0"/>
+  <testcase name="tapAndLongPressRoundTrip" classname="com.yattubhaa.app.net.ProtocolTest" time="0.004"/>
+  <testcase name="swipeRoundTripsAndClampsItsDuration" classname="com.yattubhaa.app.net.ProtocolTest" time="0.0"/>
+  <testcase name="navControlAndStatusRoundTrip" classname="com.yattubhaa.app.net.ProtocolTest" time="0.001"/>
+  <testcase name="earlierMessagesStillWork" classname="com.yattubhaa.app.net.ProtocolTest" time="0.006"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
