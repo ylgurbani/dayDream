@@ -41,39 +41,50 @@ In the app (Helper mode > Set up a new phone), enter the relay address as
 
 I haven't run Cloudflare's tunnel from here, so treat these steps as untested.
 
-## Option B: a permanent home (for your grandad)
+## Option B: a permanent home on Render (for your grandad)
 
-You need a small always-on host. The easiest I know of is **Fly.io**: it runs the relay from the
-folder you already have, gives you an `https://something.fly.dev` address, and handles the safe
-road for you. It costs a few dollars a month at most, and needs an account with a card. Please check
-their current pricing, and I haven't created any account for you.
+Render builds the relay from its Dockerfile and gives you an `https://something.onrender.com`
+address with the safe road already handled. The free plan is enough for this (0.1 CPU, 512 MB),
+but it goes to sleep after 15 minutes of no traffic and takes maybe a minute to wake up on the
+next connection — fine for occasional help calls, less fine if he needs you urgently and the
+relay is asleep. Paid plans stay awake; check Render's current pricing.
 
-1. Make an account at fly.io.
-2. Install their tool and log in:
+Render deploys from a GitHub repository, so this project needs to be on GitHub first:
+
+1. Turn this project into a git repository and push it to GitHub (a new **private** repo is
+   fine — Render only needs read access to it):
    ```bash
-   brew install flyctl
-   fly auth login
+   cd "Yattu Bhaa"
+   git init && git add -A && git commit -m "Yattu Bhaa"
+   gh repo create yattu-bhaa --private --source=. --push   # needs the gh CLI and a GitHub login
    ```
-3. Open `relay-server/fly.toml` and change the `app =` line to a name nobody else has, for example
-   `yattu-relay-yourname`.
-4. From the `relay-server` folder:
-   ```bash
-   fly apps create yattu-relay-yourname      # the same name as in fly.toml
-   fly deploy --ha=false                     # exactly ONE copy, on purpose (see below)
-   ```
-5. Open `https://yattu-relay-yourname.fly.dev/healthz`. It should say `ok`.
-6. In the app, use the relay address `wss://yattu-relay-yourname.fly.dev`.
+   Without the `gh` CLI: create an empty repo at github.com, then
+   `git remote add origin <the URL> && git push -u origin main`.
+2. Make an account at render.com and connect your GitHub account to it.
+3. In the Render dashboard: **New +** → **Blueprint** → pick the `yattu-bhaa` repo. Render reads
+   `relay-server/render.yaml` (already in this project) and proposes one web service built from
+   `relay-server/Dockerfile`. Click **Apply**.
+   - If you would rather not use a Blueprint: **New +** → **Web Service** → pick the repo →
+     set **Root Directory** to `relay-server` → **Runtime** to **Docker** → create it. Then add
+     the environment variable `TRUST_PROXY=1` yourself (the Blueprint already sets this).
+4. Once it deploys, open `https://<the name Render gave it>.onrender.com/healthz`. It should say
+   `ok`.
+5. In the app, use the relay address `wss://<the same name>.onrender.com`.
+6. In the service's Settings, set **Health Check Path** to `/healthz` — Render then restarts it
+   automatically if it ever stops responding.
 
-**Why exactly one copy:** the relay keeps who is connected in memory. Two copies would each know
-half of it, and two phones could end up on different ones and never meet.
+**Leave the instance count at 1.** The relay keeps who is connected in memory; a second instance
+would only know half of it, and two phones could land on different ones and never meet. The free
+plan only ever runs one instance, so this is automatic there — just don't turn on scaling later.
 
-The `fly.toml` I wrote is untested against the real Fly.io.
+I have not run this against the real Render, so treat it as untested; I confirmed the `render.yaml`
+field names and the free-plan behaviour against Render's current docs, but not an actual deploy.
 
 ## Other places that work
 
-Any host that gives you an `https://` address and allows WebSockets: Railway, Render (its free
-level goes to sleep when idle, so the first connection can take a minute), or a small rented server
-with Caddy in front. The relay is one Node program with a Dockerfile.
+Any host that gives you an `https://` address, allows WebSockets, and (as above) runs exactly one
+instance: Railway, **Fly.io** (a `relay-server/fly.toml` is included, untested, if you'd rather use
+that), or a small rented server with Caddy in front.
 
 ## Checking it worked
 
