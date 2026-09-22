@@ -234,6 +234,39 @@ purpose. The helper is the technical user here, and the one who can actually act
 link is struggling (wait, or suggest moving closer to the router) rather than assume the app itself
 is broken.
 
+### A real, disruptive bug: the encoder's own output rate had no ceiling
+
+Real-world testing with two phones genuinely far apart found the session disconnecting roughly
+every ten seconds, and doing so almost every time the helper pointed at something. Root cause,
+found by re-reading the two places that actually decide this rather than guessing: a surface-input
+encoder has no frame-rate limit of its own — `MediaFormat.KEY_FRAME_RATE` is only a hint used for
+bitrate math, not an enforced cap, so the encoder processes every frame the compositor draws to its
+input surface, however often that happens to be. Most of the time a phone screen is close enough
+to still that this does not matter. But the pointer ring's own pulsing animation is drawn on his
+screen too, so it is captured like anything else — while it is on, the compositor can be redrawing
+at the display's full refresh rate, and the encoder followed it, producing far more video chunks
+per second than usual, each one its own message to the relay. The relay caps how many messages one
+connection may send per second and closes it over the limit — a real, useful defence in general,
+but tuned for the old JPEG pipeline's own explicit ~4fps throttle, never revisited when that
+pipeline was replaced with one that has no throttle of its own. The two together meant: point at
+something, the ring starts pulsing, the encoder's real output rate spikes, the relay's limit is hit,
+the connection is closed — which is exactly "almost always crashes the connection immediately."
+
+Fixed at the source, not by papering over it at the limit: `ScreenEncoder` now runs every delta
+(non-keyframe) chunk past a `FrameRateLimiter` before forwarding it, capping the real output rate
+to about 25fps — smoother than the ~4fps the old pipeline ran at, comfortably under what the relay
+allows, keyframes never held back. Verified live, not just reasoned about: with the fix in place,
+tapping to point roughly forty times over half a minute — deliberately harder and faster than
+normal use, to make sure the old failure would have shown up if the fix had not actually worked —
+produced zero rate-limit closes (the relay now logs this event by name specifically because it
+was hard to diagnose without that), and the session, the picture and the ring all stayed correct
+throughout. The relay's own limit was also raised a little as a margin, and its heartbeat (how
+long it waits without a reply before deciding a connection is dead) was eased back from an
+earlier, over-tightened value — 10 seconds turned out to be too little slack for a real
+connection's own real latency, especially while it is also carrying active video, and it does
+not need to be that tight now that `ScreenShareService.onTaskRemoved` handles the common "app
+closed" case directly, without depending on this heartbeat at all.
+
 ## Known limitation: the ring can look briefly stale in the picture itself
 
 The Stop button, banner and pointer ring are real content drawn on his screen, so they are part of

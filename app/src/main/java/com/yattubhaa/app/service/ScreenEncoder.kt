@@ -5,6 +5,7 @@ import android.media.MediaCodecInfo
 import android.media.MediaFormat
 import android.os.Bundle
 import android.os.Handler
+import android.os.SystemClock
 import android.view.Surface
 
 /**
@@ -34,6 +35,9 @@ class ScreenEncoder(
     /** The most recent SPS/PPS config bytes, reused for every keyframe (they do not change
      *  within a session), not just the one immediately after they were (re-)emitted. */
     private var configBytes: ByteArray? = null
+    /** Bounds the real output rate — see [FrameRateLimiter]'s own doc for why this exists at
+     *  all: nothing else here actually caps how often a surface-input encoder produces output. */
+    private val rateLimiter = FrameRateLimiter(minIntervalMs = MIN_FRAME_INTERVAL_MS)
 
     init {
         val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height).apply {
@@ -97,9 +101,11 @@ class ScreenEncoder(
             return
         }
         if (!isKeyFrame) {
+            if (!rateLimiter.shouldForward(SystemClock.elapsedRealtime(), isKeyFrame = false)) return
             onChunk(false, width, height, data)
             return
         }
+        rateLimiter.shouldForward(SystemClock.elapsedRealtime(), isKeyFrame = true) // resets its clock; see the doc there
         val payload = configBytes?.let { it + data } ?: data
         onChunk(true, width, height, payload)
     }
@@ -107,5 +113,9 @@ class ScreenEncoder(
     private companion object {
         const val FRAME_RATE = 15
         const val I_FRAME_INTERVAL_SECONDS = 2
+        // Comfortably under the relay's own per-connection message rate limit (see server.js),
+        // even sharing that budget with pointer, gesture and control messages. Still far smoother
+        // than the ~4fps the JPEG pipeline this replaced ran at.
+        const val MIN_FRAME_INTERVAL_MS = 40L // ~25fps ceiling for delta frames
     }
 }

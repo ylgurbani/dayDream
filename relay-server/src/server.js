@@ -62,12 +62,25 @@ export function createRelay(overrides = {}) {
     // How this bounds the worst case a dead connection (not a clean close - a phone that lost
     // its network entirely, or was killed in a way that skipped its own cleanup) is noticed:
     // up to ~2x this, since a death right after a ping cycle waits a full cycle before the next
-    // one exposes it. Kept well under a minute so that worst case stays reasonable even when the
-    // app's own cleanup (ScreenShareService.onTaskRemoved) does not get a chance to run.
-    heartbeatMs: 10000,
+    // one exposes it. Was tightened to 10s for that case, then found (real-world testing, two
+    // phones genuinely far apart, not two emulators on one machine) to be too tight for that same
+    // connection's own real latency, especially while it is also carrying active video: a pong
+    // that is merely a little late looks identical to a dead connection at 10s, and gets treated
+    // as one. Eased back off, prioritising not punishing a live but ordinarily slow connection
+    // over shaving a few seconds off a comparatively rare edge case (a process killed in a way
+    // that skips ScreenShareService.onTaskRemoved, which now handles the common case — the app
+    // being closed normally — without needing this heartbeat at all).
+    heartbeatMs: 25000,
     maxRooms: 1000,
     maxConnectionsPerIp: 10,
-    maxMessagesPerSecond: 100,
+    // Shared by every message type on one connection, video included. A surface-input encoder
+    // has no frame-rate cap of its own (see ScreenEncoder's FrameRateLimiter, added after
+    // real-world testing found this exact limit closing the connection — reliably, right as
+    // pointing at something on the mirrored screen, because the pointer ring's own pulsing
+    // animation is itself captured, briefly pushing the encoder's real output rate well past what
+    // this used to allow). That client-side fix is the real one; this is raised too, as a margin,
+    // not as the fix itself.
+    maxMessagesPerSecond: 150,
     maxBufferedBytes: 4 * 1024 * 1024, // drop frames for a slow peer instead of buffering forever
     ...overrides,
   };
@@ -134,7 +147,14 @@ export function createRelay(overrides = {}) {
     ws.on('message', (data, isBinary) => {
       const now = Date.now();
       if (now - windowStart >= 1000) { windowStart = now; windowCount = 0; }
-      if (++windowCount > cfg.maxMessagesPerSecond) { ws.close(1008, 'rate limit'); return; }
+      if (++windowCount > cfg.maxMessagesPerSecond) {
+        // Metadata only (role and a count), never content - consistent with what this relay
+        // already sees regardless. Logged because this specific close was hard to diagnose
+        // without it: it looks identical to an ordinary drop from the outside.
+        console.warn(`rate limit: closing ${role || 'unjoined'} in room ${roomId}`);
+        ws.close(1008, 'rate limit');
+        return;
+      }
 
       if (!role) {
         // The first message must be a text join. Anything else is a protocol error.
