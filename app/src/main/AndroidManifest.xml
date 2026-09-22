@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Always needed: talking to the pairing relay. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Tier 1 panic button + Tier 2 pointer overlay: draw on top of other apps. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <!-- Foreground service notice while a help session is active. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+
+    <!-- Tier 2: mirroring the screen live during a session is granted per-session via the
+         system's own MediaProjection consent dialog, not a manifest permission. -->
+
+    <!-- Scanning the one-time pairing QR code. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
+
+    <!-- Tier 3 (advanced, opt-in, OFF by default): accessibility-based tap/swipe injection.
+         android.permission.BIND_ACCESSIBILITY_SERVICE is held by the system and granted to the
+         service below when, and only when, the person on this phone turns it on themselves in
+         system Settings > Accessibility. The app never enables it on its own, and Helper mode
+         shows plainly that turning it on is a standing state some banking apps may object to
+         until it is turned back off. See docs/SECURITY.md. -->
+
+    <application
+        android:name=".YattuBhaaApp"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/app_name"
+        android:theme="@style/Theme.YattuBhaa"
+        android:supportsRtl="true">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTask"
+            android:configChanges="orientation|screenSize|keyboardHidden|uiMode">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- Pairing links: yattubhaa://pair?k=...&n=...&r=... (opened via the relay's /join
+                 page). The app always asks the person to confirm before saving anything. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="yattubhaa" android:host="pair" />
+            </intent-filter>
+        </activity>
+
+        <!-- Tier 2 / Tier 3 live session: mirrors the screen to the paired helper for the
+             duration of a session only. Torn down completely (and the notification removed)
+             the moment the session ends or either side taps Stop. -->
+        <service
+            android:name=".service.ScreenShareService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
+
+        <!-- Tier 3 only. See the note above the permission comment block. -->
+        <service
+            android:name=".service.RemoteInputAccessibilityService"
+            android:enabled="false"
+            android:exported="false"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/accessibility_service_config" />
+        </service>
+
+    </application>
+</manifest>

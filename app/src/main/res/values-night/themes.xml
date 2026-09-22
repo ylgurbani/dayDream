@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark twin of values/themes.xml: black window, light status and navigation bar icons. -->
+    <style name="Theme.YattuBhaa" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#FF000000</item>
+        <item name="android:forceDarkAllowed">false</item>
+    </style>
+</resources>

@@ -1,0 +1,97 @@
+package com.yattubhaa.app.session
+
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import com.yattubhaa.app.net.ControlState
+import com.yattubhaa.app.net.NavAction
+import com.yattubhaa.app.net.Protocol
+import com.yattubhaa.app.net.Role
+import com.yattubhaa.app.pairing.PairingStore
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+
+enum class HelperPhase { Connecting, WaitingForPhone, Secured, Ended }
+
+data class HelperState(
+    val phase: HelperPhase,
+    val name: String,
+    val message: String = "",
+    /** True when the session ended because the typed number did not match. */
+    val wrongCode: Boolean = false,
+    /** Latest picture of their screen, once they have chosen to share it. */
+    val frame: Bitmap? = null,
+    /** Where the helper last pointed, as fractions of the screen, or null. */
+    val pointer: Pair<Float, Float>? = null,
+    /** What their phone last said about control: asked, on, blocked, refused... */
+    val controlState: ControlState = ControlState.Off,
+)
+
+/** The helper's side: connect with the number the other person reads out, then watch and point. */
+class HelperSession(pairing: PairingStore.Record, code: String) : BaseSession(Role.Helper, pairing, code) {
+    private val _state = MutableStateFlow(HelperState(HelperPhase.Connecting, pairing.name))
+    val state: StateFlow<HelperState> = _state.asStateFlow()
+
+    override fun onPeer(present: Boolean) {
+        val s = _state.value
+        when {
+            present && s.phase == HelperPhase.Connecting -> Unit // wait for the handshake result
+            !present && s.phase == HelperPhase.Secured -> end("${pairing.name} disconnected.", notifyPeer = false)
+            !present -> _state.value = s.copy(phase = HelperPhase.WaitingForPhone)
+        }
+    }
+
+    override fun onSecured() {
+        _state.value = _state.value.copy(phase = HelperPhase.Secured, message = "")
+    }
+
+    override fun onBadCode() {
+        // Their hello did not match the number typed here. Tell the helper straight away.
+        end("That number does not match. Ask ${pairing.name} to read it out again.", notifyPeer = false, wrongCode = true)
+    }
+
+    override fun onMessage(message: Protocol.Message) {
+        when (message) {
+            is Protocol.Message.Frame -> {
+                val bitmap = BitmapFactory.decodeByteArray(message.jpeg, 0, message.jpeg.size) ?: return
+                _state.value = _state.value.copy(frame = bitmap)
+            }
+            // Only their phone decides whether control is on; this just shows what it said.
+            is Protocol.Message.ControlStatus -> _state.value = _state.value.copy(controlState = message.state)
+            else -> Unit
+        }
+    }
+
+    override fun onEnded(reason: String) {
+        _state.value = _state.value.copy(phase = HelperPhase.Ended, message = reason, pointer = null)
+    }
+
+    fun end(reason: String, notifyPeer: Boolean, wrongCode: Boolean) {
+        if (wrongCode) _state.value = _state.value.copy(wrongCode = true)
+        end(reason, notifyPeer)
+    }
+
+    fun point(x: Float, y: Float) {
+        if (send(Protocol.pointer(x, y))) _state.value = _state.value.copy(pointer = x to y)
+    }
+
+    fun clearPointer() {
+        if (send(Protocol.clearPointer())) _state.value = _state.value.copy(pointer = null)
+    }
+
+    /** Ask to tap and swipe for them. Nothing happens unless they say yes on their phone. */
+    fun requestControl() {
+        if (send(Protocol.controlRequest())) _state.value = _state.value.copy(controlState = ControlState.Asked)
+    }
+
+    fun releaseControl() {
+        if (send(Protocol.controlRelease())) _state.value = _state.value.copy(controlState = ControlState.Off)
+    }
+
+    /** These only do anything once their phone has said yes; it ignores them otherwise. */
+    fun tap(x: Float, y: Float) = send(Protocol.tap(x, y))
+    fun longPress(x: Float, y: Float) = send(Protocol.longPress(x, y))
+    fun swipe(x1: Float, y1: Float, x2: Float, y2: Float, durationMs: Int) =
+        send(Protocol.swipe(x1, y1, x2, y2, durationMs))
+    fun navigate(action: NavAction) = send(Protocol.nav(action))
+}

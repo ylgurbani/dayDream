@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The window behind the Compose content. It must follow the system's light/dark setting in
+         step with YattuTheme.kt, or dark mode ends up with dark-mode colours on a light window
+         (yellow on white, invisible text), which is what made the app unreadable. The dark twin
+         lives in values-night/themes.xml. -->
+    <style name="Theme.YattuBhaa" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#FFFFFFFF</item>
+        <item name="android:forceDarkAllowed">false</item>
+    </style>
+</resources>

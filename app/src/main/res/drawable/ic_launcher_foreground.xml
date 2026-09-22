@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Two hands reaching toward each other, simplified to a heart-shaped mark. -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M54,80 C30,62 24,50 24,41 C24,33 30,28 37,28 C44,28 50,32 54,38 C58,32 64,28 71,28 C78,28 84,33 84,41 C84,50 78,62 54,80 Z" />
+</vector>
