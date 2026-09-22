@@ -49,7 +49,6 @@ class NeedySession private constructor(pairing: PairingStore.Record, code: Strin
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var wrongTries = 0
-    private var reportedBlocked = false
 
     init {
         // The number is only good for a while, so an old one left on screen cannot be reused later.
@@ -125,26 +124,27 @@ class NeedySession private constructor(pairing: PairingStore.Record, code: Strin
     fun revokeControl() = setControl(ControlState.Off, tellPeer = true)
 
     private fun setControl(state: ControlState, tellPeer: Boolean) {
-        reportedBlocked = false
+        if (_state.value.controlState == state) return
         _state.value = _state.value.copy(controlState = state)
         if (tellPeer) send(Protocol.controlStatus(state))
     }
 
+    /**
+     * Applies one tap, swipe or nav message, and keeps this phone's own [controlState] (which
+     * drives what he sees on his own screen, not just what the helper is told) in step with
+     * what actually happened. Reachable from Blocked too, so a Nav message can still get through
+     * while paused, and so recovery back to On is noticed the moment he leaves the secure app.
+     */
     private fun applyGesture(message: Protocol.Message) {
-        if (_state.value.controlState != ControlState.On) return
+        val cs = _state.value.controlState
+        if (cs != ControlState.On && cs != ControlState.Blocked) return
         when (RemoteInput.apply(message)) {
-            RemoteInput.Result.Blocked -> if (!reportedBlocked) {
-                reportedBlocked = true
-                send(Protocol.controlStatus(ControlState.Blocked))
-            }
-            RemoteInput.Result.Done -> if (reportedBlocked) {
-                reportedBlocked = false
-                send(Protocol.controlStatus(ControlState.On))
-            }
+            RemoteInput.Result.Blocked -> setControl(ControlState.Blocked, tellPeer = true)
+            RemoteInput.Result.Done -> setControl(ControlState.On, tellPeer = true)
             RemoteInput.Result.Unavailable ->
                 // They switched the accessibility setting off mid-session.
                 setControl(ControlState.Unavailable, tellPeer = true)
-            else -> Unit
+            RemoteInput.Result.Failed -> Unit // a one-off failure; leave the state as it is
         }
     }
 

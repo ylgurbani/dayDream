@@ -6,6 +6,7 @@ import android.content.Intent
 import android.graphics.Path
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityWindowInfo
+import com.yattubhaa.app.data.Prefs
 import com.yattubhaa.app.net.NavAction
 
 /**
@@ -25,6 +26,8 @@ class RemoteInputAccessibilityService : AccessibilityService(), RemoteInputTarge
     override fun onServiceConnected() {
         super.onServiceConnected()
         RemoteInput.attach(this)
+        // From here on, a future request only needs to wait for a reconnect, never Settings again.
+        Prefs.accessibilityGrantedSinceLastOff = true
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
@@ -75,6 +78,7 @@ class RemoteInputAccessibilityService : AccessibilityService(), RemoteInputTarge
             NavAction.Back -> GLOBAL_ACTION_BACK
             NavAction.Home -> GLOBAL_ACTION_HOME
             NavAction.Recents -> GLOBAL_ACTION_RECENTS
+            NavAction.Notifications -> GLOBAL_ACTION_NOTIFICATIONS
         },
     )
 

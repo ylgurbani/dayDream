@@ -94,7 +94,11 @@ class SessionOverlay(private val context: Context, private val onStop: () -> Uni
             this.text = text
             setTextSize(TypedValue.COMPLEX_UNIT_SP, 20f)
             setTextColor(Color.WHITE)
-            setBackgroundColor(Color.rgb(176, 0, 32))
+            // See-through enough that a menu or button sitting right behind it still shows
+            // through; the window itself stays fully opaque (alpha 1) so the text stays crisp
+            // rather than washed out, and a text shadow keeps it readable over anything behind it.
+            setBackgroundColor(Color.argb(190, 176, 0, 32))
+            setShadowLayer(4f * resources.displayMetrics.density, 0f, 0f, Color.BLACK)
             gravity = Gravity.CENTER
             setPadding(dp(16), dp(40), dp(16), dp(12))
         }
@@ -107,7 +111,6 @@ class SessionOverlay(private val context: Context, private val onStop: () -> Uni
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP
-            alpha = 0.8f // touches pass through to the app underneath
         }
         windows.addView(view, params)
         banner = view

@@ -65,6 +65,25 @@ nothing here hides it.
   can read those package names. Android's own "full control" warning uses generic wording that
   sounds broader than that.
 - It is off in the manifest, and is only offered once he has said yes to a request.
+- Recovery from Blocked back to On happens the next time a Back/Home/Recents/Notifications message
+  is applied (those always go through), or the next tap once he is genuinely out. If he leaves the
+  secure app himself and the helper sends nothing further, the paused state does not clear on its
+  own — there is no proactive recheck purely from the app changing on his screen, only from the
+  next message actually being applied. Pressing one of the nav buttons is the reliable way out.
+
+## What Android itself hides, not this app
+
+Tested on a real two-phone session: while Android's own Settings app is in the foreground, Android
+hides every overlay window from every app, ours included — the red Stop button and banner vanish,
+and come back the instant he leaves Settings. This was confirmed to be Android's own doing, not
+this app's: the same thing happens when Settings is opened by a command that never goes through any
+of this app's code at all. **Taps and swipes keep working the whole time** — only the visible
+overlay is hidden, tested by watching a real slider move while the overlay was invisible. This
+app never removes its own overlay for ordinary Settings use any more; it only does so once, for the
+one Settings screen it cannot avoid sending him to (turning the accessibility switch on for the
+first time, or again after "Turn off remote control"), because Android disables the "Allow" button
+on that specific screen while any overlay is present. A slow reconnect after that is no longer
+mistaken for "never granted": it now just waits longer before giving up.
 
 ## Not verified
 

@@ -24,6 +24,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import com.yattubhaa.app.R
+import com.yattubhaa.app.data.Prefs
 import com.yattubhaa.app.net.ControlState
 import com.yattubhaa.app.net.Protocol
 import com.yattubhaa.app.session.NeedyPhase
@@ -159,7 +160,8 @@ class ScreenShareService : Service() {
                 overlay?.hideQuestion()
                 overlay?.setBanner("$name can tap on your screen. Tap STOP to end it.")
             }
-            ControlState.Blocked -> overlay?.setBanner("Taps are paused while a bank or payment app is open.")
+            ControlState.Blocked ->
+                overlay?.setBanner("You're in a secure app, so $name cannot tap or swipe here right now.")
             ControlState.Unavailable -> overlay?.hideQuestion()
             ControlState.Off -> {
                 overlay?.hideQuestion()
@@ -170,19 +172,26 @@ class ScreenShareService : Service() {
 
     private fun allowControl(session: NeedySession) {
         ControlCapability.setOffered(this, true)
+        val grantedBefore = Prefs.accessibilityGrantedSinceLastOff
         scope.launch {
-            // If he switched it on in Settings before, Android reconnects it a moment after it is offered.
-            withTimeoutOrNull(3000) { RemoteInput.connected.first { it } }
+            // If he has switched it on before, Android just needs a moment to reconnect the
+            // service (longer on an older phone) — no need to send him to Settings, or touch
+            // the overlay, for what is really just a slow reconnect.
+            val waitMs = if (grantedBefore) RECONNECT_WAIT_MS else FIRST_TIME_WAIT_MS
+            withTimeoutOrNull(waitMs) { RemoteInput.connected.first { it } }
             val available = RemoteInput.isAvailable
             session.acceptControl()
-            if (!available) sendToAccessibilitySettings()
+            if (!available && !grantedBefore) sendToAccessibilitySettings()
         }
     }
 
     /**
      * Android ignores taps on its "allow full control" dialog while any other app is drawing over
      * it, and our red Stop button and pointer layer are exactly that. So they are lifted while he
-     * is in Settings, and put back once the setting is on (or after a couple of minutes).
+     * is in Settings, and put back the moment the setting is on (or after a couple of minutes).
+     * Reached only the first time he ever turns this on, or after he has explicitly turned it
+     * off again — never for an ordinary reconnect, so the overlay otherwise stays up the whole
+     * time he is anywhere else in Settings (volume, notifications, app info, and so on).
      */
     private fun sendToAccessibilitySettings() {
         overlay?.remove()
@@ -263,6 +272,8 @@ class ScreenShareService : Service() {
         private const val FRAME_INTERVAL_MS = 250L // about four pictures a second
         private const val KEEPALIVE_MS = 2000L
         private const val SETTINGS_TRIP_MS = 2 * 60 * 1000L
+        private const val FIRST_TIME_WAIT_MS = 3000L
+        private const val RECONNECT_WAIT_MS = 8000L
 
         /** [resultCode] and [data] are what Android's screen-capture consent dialog returned. */
         fun start(context: Context, resultCode: Int, data: Intent) {

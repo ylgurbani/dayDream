@@ -110,11 +110,16 @@ fun HelperFrameView(
 
         val hasControl = controlState == ControlState.On || controlState == ControlState.Blocked
         if (hasControl) {
-            // Going back or home always works, even with a bank app open: it is how you get out of one.
+            // Going back or home always works, even with a bank app open: it is how you get out of
+            // one. A 2x2 grid rather than one cramped row of four, since swiping down for the
+            // notification shade is otherwise nearly impossible to trigger through the mirror.
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 BigButton("Back", { onNavigate(NavAction.Back) }, Modifier.weight(1f), ButtonKind.Secondary, minHeight = 56.dp)
                 BigButton("Home", { onNavigate(NavAction.Home) }, Modifier.weight(1f), ButtonKind.Secondary, minHeight = 56.dp)
+            }
+            Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 BigButton("Recent", { onNavigate(NavAction.Recents) }, Modifier.weight(1f), ButtonKind.Secondary, minHeight = 56.dp)
+                BigButton("Notifications", { onNavigate(NavAction.Notifications) }, Modifier.weight(1f), ButtonKind.Secondary, minHeight = 56.dp)
             }
             Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (controlState == ControlState.On) {

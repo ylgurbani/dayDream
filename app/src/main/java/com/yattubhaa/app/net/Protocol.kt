@@ -15,7 +15,7 @@ enum class ControlState(val wire: Byte) {
     Unavailable(4),
 }
 
-enum class NavAction(val wire: Byte) { Back(1), Home(2), Recents(3) }
+enum class NavAction(val wire: Byte) { Back(1), Home(2), Recents(3), Notifications(4) }
 
 /**
  * What the two phones say to each other once the secure channel is up. Each message is one
