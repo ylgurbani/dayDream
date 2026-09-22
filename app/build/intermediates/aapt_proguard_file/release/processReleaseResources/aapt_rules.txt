@@ -1,0 +1,14 @@
+-keep class androidx.core.app.CoreComponentFactory { <init>(); }
+-keep class androidx.profileinstaller.ProfileInstallReceiver { <init>(); }
+-keep class androidx.startup.InitializationProvider { <init>(); }
+-keep class com.journeyapps.barcodescanner.CaptureActivity { <init>(); }
+-keep class com.yattubhaa.app.MainActivity { <init>(); }
+-keep class com.yattubhaa.app.YattuBhaaApp { <init>(); }
+-keep class com.yattubhaa.app.service.RemoteInputAccessibilityService { <init>(); }
+-keep class com.yattubhaa.app.service.ScreenShareService { <init>(); }
+-keep class com.journeyapps.barcodescanner.BarcodeView { <init>(android.content.Context, android.util.AttributeSet); }
+
+-keep class com.journeyapps.barcodescanner.DecoratedBarcodeView { <init>(android.content.Context, android.util.AttributeSet); }
+
+-keep class com.journeyapps.barcodescanner.ViewfinderView { <init>(android.content.Context, android.util.AttributeSet); }
+

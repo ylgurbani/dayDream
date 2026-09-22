@@ -1,0 +1,30 @@
+[
+    {
+        "merged": "/Users/yashwantgurbani/.gradle/daemon/8.11.1/com.yattubhaa.app-debug-52:/drawable_ic_launcher_background.xml.flat",
+        "source": "/Users/yashwantgurbani/.gradle/daemon/8.11.1/com.yattubhaa.app-main-54:/drawable/ic_launcher_background.xml"
+    },
+    {
+        "merged": "/Users/yashwantgurbani/.gradle/daemon/8.11.1/com.yattubhaa.app-debug-52:/xml_accessibility_service_config.xml.flat",
+        "source": "/Users/yashwantgurbani/.gradle/daemon/8.11.1/com.yattubhaa.app-main-54:/xml/accessibility_service_config.xml"
+    },
+    {
+        "merged": "/Users/yashwantgurbani/.gradle/daemon/8.11.1/com.yattubhaa.app-debug-52:/drawable_ic_launcher_foreground.xml.flat",
+        "source": "/Users/yashwantgurbani/.gradle/daemon/8.11.1/com.yattubhaa.app-main-54:/drawable/ic_launcher_foreground.xml"
+    },
+    {
+        "merged": "/Users/yashwantgurbani/.gradle/daemon/8.11.1/com.yattubhaa.app-debug-52:/xml_network_security_config.xml.flat",
+        "source": "/Users/yashwantgurbani/.gradle/daemon/8.11.1/com.yattubhaa.app-debug-53:/xml/network_security_config.xml"
+    },
+    {
+        "merged": "/Users/yashwantgurbani/.gradle/daemon/8.11.1/com.yattubhaa.app-debug-52:/mipmap-anydpi-v26_ic_launcher_round.xml.flat",
+        "source": "/Users/yashwantgurbani/.gradle/daemon/8.11.1/com.yattubhaa.app-main-54:/mipmap-anydpi-v26/ic_launcher_round.xml"
+    },
+    {
+        "merged": "com.yattubhaa.app-debug-52:/xml_accessibility_service_config.xml.flat",
+        "source": "com.yattubhaa.app-main-54:/xml/accessibility_service_config.xml"
+    },
+    {
+        "merged": "/Users/yashwantgurbani/.gradle/daemon/8.11.1/com.yattubhaa.app-debug-52:/mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "/Users/yashwantgurbani/.gradle/daemon/8.11.1/com.yattubhaa.app-main-54:/mipmap-anydpi-v26/ic_launcher.xml"
+    }
+]

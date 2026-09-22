@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="accessibility_service_description">Lets the family member you are on a video call with tap and swipe on your screen for you, only while you are both connected in a help session. It only checks which apps are open so it can refuse to tap in banking apps. It does not read what is on your screen.</string>
+    <string name="app_name">Yattu Bhaa</string>
+    <style name="Theme.YattuBhaa" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#FFFFFFFF</item>
+        <item name="android:forceDarkAllowed">false</item>
+    </style>
+</resources>

@@ -1,0 +1,290 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="com.yattubhaa.app"
+4    android:versionCode="1"
+5    android:versionName="0.1.0" >
+6
+7    <uses-sdk
+8        android:minSdkVersion="26"
+9        android:targetSdkVersion="35" />
+10
+11    <!-- Always needed: talking to the pairing relay. -->
+12    <uses-permission android:name="android.permission.INTERNET" />
+12-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:5:5-67
+12-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:5:22-64
+13    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+13-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:6:5-79
+13-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:6:22-76
+14
+15    <!-- Tier 1 panic button + Tier 2 pointer overlay: draw on top of other apps. -->
+16    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+16-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:9:5-78
+16-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:9:22-75
+17
+18    <!-- Foreground service notice while a help session is active. -->
+19    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+19-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:12:5-77
+19-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:12:22-74
+20    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+20-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:13:5-77
+20-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:13:22-74
+21    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+21-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:14:5-94
+21-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:14:22-91
+22
+23    <!--
+24         Tier 2: mirroring the screen live during a session is granted per-session via the
+25         system's own MediaProjection consent dialog, not a manifest permission.
+26    -->
+27
+28
+29    <!-- Scanning the one-time pairing QR code. -->
+30    <uses-permission android:name="android.permission.CAMERA" />
+30-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:20:5-65
+30-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:20:22-62
+31
+32    <uses-feature
+32-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:21:5-85
+33        android:name="android.hardware.camera"
+33-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:21:19-57
+34        android:required="false" />
+34-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:21:58-82
+35    <uses-feature
+35-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:22:5-95
+36        android:name="android.hardware.camera.autofocus"
+36-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:22:19-67
+37        android:required="false" />
+37-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:22:68-92
+38
+39    <permission
+39-->[androidx.core:core:1.15.0] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/5095b87f9bff9e3176e0442eeda73000/transformed/core-1.15.0/AndroidManifest.xml:22:5-24:47
+40        android:name="com.yattubhaa.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+40-->[androidx.core:core:1.15.0] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/5095b87f9bff9e3176e0442eeda73000/transformed/core-1.15.0/AndroidManifest.xml:23:9-81
+41        android:protectionLevel="signature" />
+41-->[androidx.core:core:1.15.0] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/5095b87f9bff9e3176e0442eeda73000/transformed/core-1.15.0/AndroidManifest.xml:24:9-44
+42
+43    <uses-permission android:name="com.yattubhaa.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" />
+43-->[androidx.core:core:1.15.0] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/5095b87f9bff9e3176e0442eeda73000/transformed/core-1.15.0/AndroidManifest.xml:26:5-97
+43-->[androidx.core:core:1.15.0] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/5095b87f9bff9e3176e0442eeda73000/transformed/core-1.15.0/AndroidManifest.xml:26:22-94
+44
+45    <uses-feature
+45-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b7afdea9c14965d79fcc0cafc698625/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:28:5-30:36
+46        android:name="android.hardware.camera.front"
+46-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b7afdea9c14965d79fcc0cafc698625/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:29:9-53
+47        android:required="false" />
+47-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b7afdea9c14965d79fcc0cafc698625/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:30:9-33
+48    <uses-feature
+48-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b7afdea9c14965d79fcc0cafc698625/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:36:5-38:36
+49        android:name="android.hardware.camera.flash"
+49-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b7afdea9c14965d79fcc0cafc698625/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:37:9-53
+50        android:required="false" />
+50-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b7afdea9c14965d79fcc0cafc698625/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:38:9-33
+51    <uses-feature
+51-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b7afdea9c14965d79fcc0cafc698625/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:39:5-41:36
+52        android:name="android.hardware.screen.landscape"
+52-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b7afdea9c14965d79fcc0cafc698625/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:40:9-57
+53        android:required="false" />
+53-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b7afdea9c14965d79fcc0cafc698625/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:41:9-33
+54    <uses-feature
+54-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b7afdea9c14965d79fcc0cafc698625/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:42:5-44:36
+55        android:name="android.hardware.wifi"
+55-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b7afdea9c14965d79fcc0cafc698625/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:43:9-45
+56        android:required="false" />
+56-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b7afdea9c14965d79fcc0cafc698625/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:44:9-33
+57    <!--
+58 Tier 3 (advanced, opt-in, OFF by default): accessibility-based tap/swipe injection.
+59         android.permission.BIND_ACCESSIBILITY_SERVICE is held by the system and granted to the
+60         service below when, and only when, the person on this phone turns it on themselves in
+61         system Settings > Accessibility. The app never enables it on its own, and Helper mode
+62         shows plainly that turning it on is a standing state some banking apps may object to
+63         until it is turned back off. See docs/SECURITY.md.
+64    -->
+65    <application
+65-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:31:5-82:19
+66        android:name="com.yattubhaa.app.YattuBhaaApp"
+66-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:32:9-37
+67        android:allowBackup="false"
+67-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:33:9-36
+68        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+68-->[androidx.core:core:1.15.0] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/5095b87f9bff9e3176e0442eeda73000/transformed/core-1.15.0/AndroidManifest.xml:28:18-86
+69        android:extractNativeLibs="false"
+70        android:icon="@mipmap/ic_launcher"
+70-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:34:9-43
+71        android:label="@string/app_name"
+71-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:36:9-41
+72        android:roundIcon="@mipmap/ic_launcher_round"
+72-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:35:9-54
+73        android:supportsRtl="true"
+73-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:38:9-35
+74        android:theme="@style/Theme.YattuBhaa" >
+74-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:37:9-47
+75        <activity
+75-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:40:9-58:20
+76            android:name="com.yattubhaa.app.MainActivity"
+76-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:41:13-41
+77            android:configChanges="orientation|screenSize|keyboardHidden|uiMode"
+77-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:44:13-81
+78            android:exported="true"
+78-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:42:13-36
+79            android:launchMode="singleTask" >
+79-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:43:13-44
+80            <intent-filter>
+80-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:45:13-48:29
+81                <action android:name="android.intent.action.MAIN" />
+81-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:46:17-69
+81-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:46:25-66
+82
+83                <category android:name="android.intent.category.LAUNCHER" />
+83-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:47:17-77
+83-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:47:27-74
+84            </intent-filter>
+85
+86            <!--
+87                 Pairing links: yattubhaa://pair?k=...&n=...&r=... (opened via the relay's /join
+88                 page). The app always asks the person to confirm before saving anything.
+89            -->
+90            <intent-filter>
+90-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:52:13-57:29
+91                <action android:name="android.intent.action.VIEW" />
+91-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:53:17-69
+91-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:53:25-66
+92
+93                <category android:name="android.intent.category.DEFAULT" />
+93-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:54:17-76
+93-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:54:27-73
+94                <category android:name="android.intent.category.BROWSABLE" />
+94-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:55:17-78
+94-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:55:27-75
+95
+96                <data
+96-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:56:17-72
+97                    android:host="pair"
+97-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:56:50-69
+98                    android:scheme="yattubhaa" />
+98-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:56:23-49
+99            </intent-filter>
+100        </activity>
+101
+102        <!--
+103             Tier 2 / Tier 3 live session: mirrors the screen to the paired helper for the
+104             duration of a session only. Torn down completely (and the notification removed)
+105             the moment the session ends or either side taps Stop.
+106        -->
+107        <service
+107-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:63:9-66:63
+108            android:name="com.yattubhaa.app.service.ScreenShareService"
+108-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:64:13-55
+109            android:exported="false"
+109-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:65:13-37
+110            android:foregroundServiceType="mediaProjection" />
+110-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:66:13-60
+111
+112        <!-- Tier 3 only. See the note above the permission comment block. -->
+113        <service
+113-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:69:9-80:19
+114            android:name="com.yattubhaa.app.service.RemoteInputAccessibilityService"
+114-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:70:13-68
+115            android:enabled="false"
+115-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:71:13-36
+116            android:exported="false"
+116-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:72:13-37
+117            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE" >
+117-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:73:13-79
+118            <intent-filter>
+118-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:74:13-76:29
+119                <action android:name="android.accessibilityservice.AccessibilityService" />
+119-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:75:17-92
+119-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:75:25-89
+120            </intent-filter>
+121
+122            <meta-data
+122-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:77:13-79:72
+123                android:name="android.accessibilityservice"
+123-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:78:17-60
+124                android:resource="@xml/accessibility_service_config" />
+124-->/Users/yashwantgurbani/Desktop/Yattu Bhaa/app/src/main/AndroidManifest.xml:79:17-69
+125        </service>
+126
+127        <provider
+127-->[androidx.emoji2:emoji2:1.3.0] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/1a17acba36817f533dcd33d5ee8aa4ee/transformed/emoji2-1.3.0/AndroidManifest.xml:24:9-32:20
+128            android:name="androidx.startup.InitializationProvider"
+128-->[androidx.emoji2:emoji2:1.3.0] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/1a17acba36817f533dcd33d5ee8aa4ee/transformed/emoji2-1.3.0/AndroidManifest.xml:25:13-67
+129            android:authorities="com.yattubhaa.app.androidx-startup"
+129-->[androidx.emoji2:emoji2:1.3.0] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/1a17acba36817f533dcd33d5ee8aa4ee/transformed/emoji2-1.3.0/AndroidManifest.xml:26:13-68
+130            android:exported="false" >
+130-->[androidx.emoji2:emoji2:1.3.0] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/1a17acba36817f533dcd33d5ee8aa4ee/transformed/emoji2-1.3.0/AndroidManifest.xml:27:13-37
+131            <meta-data
+131-->[androidx.emoji2:emoji2:1.3.0] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/1a17acba36817f533dcd33d5ee8aa4ee/transformed/emoji2-1.3.0/AndroidManifest.xml:29:13-31:52
+132                android:name="androidx.emoji2.text.EmojiCompatInitializer"
+132-->[androidx.emoji2:emoji2:1.3.0] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/1a17acba36817f533dcd33d5ee8aa4ee/transformed/emoji2-1.3.0/AndroidManifest.xml:30:17-75
+133                android:value="androidx.startup" />
+133-->[androidx.emoji2:emoji2:1.3.0] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/1a17acba36817f533dcd33d5ee8aa4ee/transformed/emoji2-1.3.0/AndroidManifest.xml:31:17-49
+134            <meta-data
+134-->[androidx.lifecycle:lifecycle-process:2.8.7] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/2110f92b04d5e0fb2bd9247e00dd60e5/transformed/lifecycle-process-2.8.7/AndroidManifest.xml:29:13-31:52
+135                android:name="androidx.lifecycle.ProcessLifecycleInitializer"
+135-->[androidx.lifecycle:lifecycle-process:2.8.7] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/2110f92b04d5e0fb2bd9247e00dd60e5/transformed/lifecycle-process-2.8.7/AndroidManifest.xml:30:17-78
+136                android:value="androidx.startup" />
+136-->[androidx.lifecycle:lifecycle-process:2.8.7] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/2110f92b04d5e0fb2bd9247e00dd60e5/transformed/lifecycle-process-2.8.7/AndroidManifest.xml:31:17-49
+137            <meta-data
+137-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b915fd5a3805d16a3cef9753f7f175e/transformed/profileinstaller-1.3.1/AndroidManifest.xml:29:13-31:52
+138                android:name="androidx.profileinstaller.ProfileInstallerInitializer"
+138-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b915fd5a3805d16a3cef9753f7f175e/transformed/profileinstaller-1.3.1/AndroidManifest.xml:30:17-85
+139                android:value="androidx.startup" />
+139-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b915fd5a3805d16a3cef9753f7f175e/transformed/profileinstaller-1.3.1/AndroidManifest.xml:31:17-49
+140        </provider>
+141
+142        <receiver
+142-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b915fd5a3805d16a3cef9753f7f175e/transformed/profileinstaller-1.3.1/AndroidManifest.xml:34:9-52:20
+143            android:name="androidx.profileinstaller.ProfileInstallReceiver"
+143-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b915fd5a3805d16a3cef9753f7f175e/transformed/profileinstaller-1.3.1/AndroidManifest.xml:35:13-76
+144            android:directBootAware="false"
+144-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b915fd5a3805d16a3cef9753f7f175e/transformed/profileinstaller-1.3.1/AndroidManifest.xml:36:13-44
+145            android:enabled="true"
+145-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b915fd5a3805d16a3cef9753f7f175e/transformed/profileinstaller-1.3.1/AndroidManifest.xml:37:13-35
+146            android:exported="true"
+146-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b915fd5a3805d16a3cef9753f7f175e/transformed/profileinstaller-1.3.1/AndroidManifest.xml:38:13-36
+147            android:permission="android.permission.DUMP" >
+147-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b915fd5a3805d16a3cef9753f7f175e/transformed/profileinstaller-1.3.1/AndroidManifest.xml:39:13-57
+148            <intent-filter>
+148-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b915fd5a3805d16a3cef9753f7f175e/transformed/profileinstaller-1.3.1/AndroidManifest.xml:40:13-42:29
+149                <action android:name="androidx.profileinstaller.action.INSTALL_PROFILE" />
+149-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b915fd5a3805d16a3cef9753f7f175e/transformed/profileinstaller-1.3.1/AndroidManifest.xml:41:17-91
+149-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b915fd5a3805d16a3cef9753f7f175e/transformed/profileinstaller-1.3.1/AndroidManifest.xml:41:25-88
+150            </intent-filter>
+151            <intent-filter>
+151-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b915fd5a3805d16a3cef9753f7f175e/transformed/profileinstaller-1.3.1/AndroidManifest.xml:43:13-45:29
+152                <action android:name="androidx.profileinstaller.action.SKIP_FILE" />
+152-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b915fd5a3805d16a3cef9753f7f175e/transformed/profileinstaller-1.3.1/AndroidManifest.xml:44:17-85
+152-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b915fd5a3805d16a3cef9753f7f175e/transformed/profileinstaller-1.3.1/AndroidManifest.xml:44:25-82
+153            </intent-filter>
+154            <intent-filter>
+154-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b915fd5a3805d16a3cef9753f7f175e/transformed/profileinstaller-1.3.1/AndroidManifest.xml:46:13-48:29
+155                <action android:name="androidx.profileinstaller.action.SAVE_PROFILE" />
+155-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b915fd5a3805d16a3cef9753f7f175e/transformed/profileinstaller-1.3.1/AndroidManifest.xml:47:17-88
+155-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b915fd5a3805d16a3cef9753f7f175e/transformed/profileinstaller-1.3.1/AndroidManifest.xml:47:25-85
+156            </intent-filter>
+157            <intent-filter>
+157-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b915fd5a3805d16a3cef9753f7f175e/transformed/profileinstaller-1.3.1/AndroidManifest.xml:49:13-51:29
+158                <action android:name="androidx.profileinstaller.action.BENCHMARK_OPERATION" />
+158-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b915fd5a3805d16a3cef9753f7f175e/transformed/profileinstaller-1.3.1/AndroidManifest.xml:50:17-95
+158-->[androidx.profileinstaller:profileinstaller:1.3.1] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b915fd5a3805d16a3cef9753f7f175e/transformed/profileinstaller-1.3.1/AndroidManifest.xml:50:25-92
+159            </intent-filter>
+160        </receiver>
+161
+162        <activity
+162-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b7afdea9c14965d79fcc0cafc698625/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:47:9-53:63
+163            android:name="com.journeyapps.barcodescanner.CaptureActivity"
+163-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b7afdea9c14965d79fcc0cafc698625/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:48:13-74
+164            android:clearTaskOnLaunch="true"
+164-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b7afdea9c14965d79fcc0cafc698625/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:49:13-45
+165            android:screenOrientation="sensorLandscape"
+165-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b7afdea9c14965d79fcc0cafc698625/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:50:13-56
+166            android:stateNotNeeded="true"
+166-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b7afdea9c14965d79fcc0cafc698625/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:51:13-42
+167            android:theme="@style/zxing_CaptureTheme"
+167-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b7afdea9c14965d79fcc0cafc698625/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:52:13-54
+168            android:windowSoftInputMode="stateAlwaysHidden" />
+168-->[com.journeyapps:zxing-android-embedded:4.3.0] /Users/yashwantgurbani/.gradle/caches/8.11.1/transforms/4b7afdea9c14965d79fcc0cafc698625/transformed/zxing-android-embedded-4.3.0/AndroidManifest.xml:53:13-60
+169    </application>
+170
+171</manifest>

@@ -1,0 +1,186 @@
+[
+    {
+        "merged": "com.yattubhaa.app-release-50:/drawable-hdpi-v4_notify_panel_notification_icon_bg.png.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/drawable-hdpi-v4/notify_panel_notification_icon_bg.png"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/drawable_ic_call_answer_low.xml.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/drawable/ic_call_answer_low.xml"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/drawable_ic_call_decline_low.xml.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/drawable/ic_call_decline_low.xml"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/layout_ime_secondary_split_test_activity.xml.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/layout/ime_secondary_split_test_activity.xml"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/layout-v21_notification_template_custom_big.xml.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/layout-v21/notification_template_custom_big.xml"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/layout-v21_notification_action_tombstone.xml.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/layout-v21/notification_action_tombstone.xml"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/drawable_notification_icon_background.xml.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/drawable/notification_icon_background.xml"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/drawable-hdpi-v4_notification_bg_low_pressed.9.png.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/drawable-hdpi-v4/notification_bg_low_pressed.9.png"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/drawable_ic_call_answer_video_low.xml.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/drawable/ic_call_answer_video_low.xml"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/drawable_ic_launcher_foreground.xml.flat",
+        "source": "com.yattubhaa.app-main-51:/drawable/ic_launcher_foreground.xml"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/drawable-v21_notification_action_background.xml.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/drawable-v21/notification_action_background.xml"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/drawable-xhdpi-v4_notification_bg_low_normal.9.png.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/drawable-xhdpi-v4/notification_bg_low_normal.9.png"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/color_vector_tint_color.xml.flat",
+        "source": "com.yattubhaa.app-ui-release-12:/color/vector_tint_color.xml"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/xml_accessibility_service_config.xml.flat",
+        "source": "com.yattubhaa.app-main-51:/xml/accessibility_service_config.xml"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/drawable-mdpi-v4_notify_panel_notification_icon_bg.png.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/drawable-mdpi-v4/notify_panel_notification_icon_bg.png"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "com.yattubhaa.app-main-51:/mipmap-anydpi-v26/ic_launcher.xml"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/drawable-xhdpi-v4_notification_bg_normal.9.png.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/drawable-xhdpi-v4/notification_bg_normal.9.png"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/drawable-hdpi-v4_notification_bg_normal_pressed.9.png.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/drawable-hdpi-v4/notification_bg_normal_pressed.9.png"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/layout_custom_dialog.xml.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/layout/custom_dialog.xml"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/drawable-hdpi-v4_notification_oversize_large_icon_bg.png.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/drawable-hdpi-v4/notification_oversize_large_icon_bg.png"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/drawable_ic_call_answer_video.xml.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/drawable/ic_call_answer_video.xml"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/raw_zxing_beep.ogg.flat",
+        "source": "com.yattubhaa.app-zxing-android-embedded-4.3.0-18:/raw/zxing_beep.ogg"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/drawable-hdpi-v4_notification_bg_normal.9.png.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/drawable-hdpi-v4/notification_bg_normal.9.png"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/color_vector_tint_theme_color.xml.flat",
+        "source": "com.yattubhaa.app-ui-release-12:/color/vector_tint_theme_color.xml"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/layout-v21_notification_template_icon_group.xml.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/layout-v21/notification_template_icon_group.xml"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/layout_ime_base_split_test_activity.xml.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/layout/ime_base_split_test_activity.xml"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/layout_zxing_barcode_scanner.xml.flat",
+        "source": "com.yattubhaa.app-zxing-android-embedded-4.3.0-18:/layout/zxing_barcode_scanner.xml"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/drawable-mdpi-v4_notification_bg_normal_pressed.9.png.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/drawable-mdpi-v4/notification_bg_normal_pressed.9.png"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/layout-v21_notification_action.xml.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/layout-v21/notification_action.xml"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/drawable-mdpi-v4_notification_bg_low_normal.9.png.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/drawable-mdpi-v4/notification_bg_low_normal.9.png"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/layout_notification_template_part_time.xml.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/layout/notification_template_part_time.xml"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/drawable-hdpi-v4_notification_bg_low_normal.9.png.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/drawable-hdpi-v4/notification_bg_low_normal.9.png"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/drawable-mdpi-v4_notification_bg_low_pressed.9.png.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/drawable-mdpi-v4/notification_bg_low_pressed.9.png"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/drawable_ic_launcher_background.xml.flat",
+        "source": "com.yattubhaa.app-main-51:/drawable/ic_launcher_background.xml"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/drawable_notification_bg.xml.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/drawable/notification_bg.xml"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/drawable-xhdpi-v4_notification_bg_normal_pressed.9.png.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/drawable-xhdpi-v4/notification_bg_normal_pressed.9.png"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/drawable-xhdpi-v4_notification_bg_low_pressed.9.png.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/drawable-xhdpi-v4/notification_bg_low_pressed.9.png"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/drawable-mdpi-v4_notification_bg_normal.9.png.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/drawable-mdpi-v4/notification_bg_normal.9.png"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/drawable_notification_tile_bg.xml.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/drawable/notification_tile_bg.xml"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/drawable_ic_call_decline.xml.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/drawable/ic_call_decline.xml"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/drawable-xhdpi-v4_notify_panel_notification_icon_bg.png.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/drawable-xhdpi-v4/notify_panel_notification_icon_bg.png"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/layout_zxing_capture.xml.flat",
+        "source": "com.yattubhaa.app-zxing-android-embedded-4.3.0-18:/layout/zxing_capture.xml"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/mipmap-anydpi-v26_ic_launcher_round.xml.flat",
+        "source": "com.yattubhaa.app-main-51:/mipmap-anydpi-v26/ic_launcher_round.xml"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/drawable_ic_call_answer.xml.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/drawable/ic_call_answer.xml"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/layout_notification_template_part_chronometer.xml.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/layout/notification_template_part_chronometer.xml"
+    },
+    {
+        "merged": "com.yattubhaa.app-release-50:/drawable_notification_bg_low.xml.flat",
+        "source": "com.yattubhaa.app-core-1.15.0-21:/drawable/notification_bg_low.xml"
+    }
+]
