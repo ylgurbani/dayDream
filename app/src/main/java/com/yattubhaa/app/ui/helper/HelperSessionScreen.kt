@@ -1,22 +1,9 @@
 package com.yattubhaa.app.ui.helper
 
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.drawWithContent
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.unit.dp
 import com.yattubhaa.app.session.HelperPhase
 import com.yattubhaa.app.session.SessionHub
 import com.yattubhaa.app.ui.components.BigButton
@@ -47,8 +34,8 @@ fun HelperSessionScreen(onExit: (wrongCode: Boolean) -> Unit) {
         }
 
         HelperPhase.Secured -> {
-            val frame = state.frame
-            if (frame == null) {
+            val frameSize = state.frameSize
+            if (frameSize == null) {
                 Screen(buttons = { BigButton("Stop", leave, kind = ButtonKind.Danger) }) {
                     Heading("Connected to ${state.name}")
                     Gap()
@@ -57,7 +44,8 @@ fun HelperSessionScreen(onExit: (wrongCode: Boolean) -> Unit) {
             } else {
                 HelperFrameView(
                     name = state.name,
-                    frame = frame,
+                    frameSize = frameSize,
+                    videoDecoder = session.videoDecoder,
                     pointer = state.pointer,
                     controlState = state.controlState,
                     onPoint = { x, y -> session.point(x, y) },

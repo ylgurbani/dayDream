@@ -153,10 +153,12 @@ class NeedySession private constructor(pairing: PairingStore.Record, code: Strin
         scope.cancel()
     }
 
-    /** Drops the frame if the connection is behind, so a slow link shows a slightly old
-     *  picture instead of an ever-growing delay. */
-    fun sendFrame(width: Int, height: Int, jpeg: ByteArray): Boolean =
-        backlogBytes() < MAX_BACKLOG_BYTES && send(Protocol.frame(width, height, jpeg))
+    /** Drops the chunk if the connection is behind, so a slow link catches up instead of
+     *  building an ever-growing delay. Dropping a keyframe or a delta frame mid-stream can
+     *  leave the picture briefly corrupted on his phone; it self-heals at the next keyframe,
+     *  requested at least every couple of seconds, so any glitch is bounded, not permanent. */
+    fun sendVideoChunk(keyframe: Boolean, width: Int, height: Int, data: ByteArray): Boolean =
+        backlogBytes() < MAX_BACKLOG_BYTES && send(Protocol.videoChunk(keyframe, width, height, data))
 
     private companion object {
         const val EXPIRES_AFTER_MS = 10 * 60 * 1000L

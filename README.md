@@ -16,6 +16,13 @@ screen, and (once he says yes) tap, swipe and press Back/Home for him, never ins
 Either side can stop at any time. Tested on two Android 16 emulators through the real relay, with
 the grandad phone at 200% font.
 
+Screen sharing is a live H.264 video stream (hardware encode and decode via `MediaCodec`), not a
+series of still pictures — see "How the picture gets to the helper" in
+[docs/SECURITY.md](docs/SECURITY.md) for how that works and two real bugs found building it. Its
+actual latency on a real phone over a real connection has not been measured; what has been
+verified on two emulators is that the picture, pointer ring, and remote tap and swipe are all
+correct through it.
+
 **Not built yet:** the floating HOME button (Back/Home from the helper cover most of it), Hindi/Gujarati
 text, push notifications when he taps Get Help, and rotation while sharing.
 
@@ -31,7 +38,7 @@ docs/          security and design notes
 
 ```bash
 export JAVA_HOME=/opt/homebrew/opt/openjdk@23/libexec/openjdk.jdk/Contents/Home
-./gradlew assembleDebug testDebugUnitTest      # app + 19 unit tests
+./gradlew assembleDebug testDebugUnitTest      # app + 40 unit tests
 cd relay-server && npm install && npm test     # 10 relay tests
 ```
 

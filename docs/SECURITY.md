@@ -122,6 +122,43 @@ no benefit. The app no longer touches the overlay for this at all — it always 
 decides moment to moment whether to actually draw it, correctly and more precisely than any timer
 this app could set.
 
+## How the picture gets to the helper
+
+Screen sharing is a live H.264 video stream, encoded and decoded by the phone's own video
+hardware (`MediaCodec`, surface-in/surface-out — the same technique scrcpy and other screen
+mirroring tools use), not a series of still pictures. His screen draws straight into the
+encoder's input surface, and the compressed picture draws straight onto the helper's screen, with
+no bitmap ever copied through app code on either side. This replaced an earlier JPEG-per-frame
+pipeline that had to read every frame back to a `Bitmap` and JPEG-encode it in software; the CPU
+cost of that path capped both how large a picture could be sent and how often. See
+`ScreenEncoder.kt` and `VideoDecoder.kt`.
+
+Two things were found the hard way while building this, both now handled without depending on
+whichever turns out to be true on a given phone:
+
+- **A key that should have worked did not, on every device.** `MediaFormat.KEY_PREPEND_HEADER_TO_SYNC_FRAMES`
+  is the documented way to ask the encoder to make every keyframe self-contained. On one real
+  encoder (an emulator's software AVC encoder) asking for it made `configure()` fail outright, not
+  just get ignored. Fixed by not asking for it at all: `ScreenEncoder` instead caches the SPS/PPS
+  bytes the encoder emits once at the start and prepends them, by hand, to every keyframe itself —
+  the same end result, achieved a way that does not depend on that key being supported anywhere.
+- **A decoder that never decoded anything, and never said why.** Because the picture is a
+  continuous stream, not one request per frame, the helper's decoder can come into existence
+  (its `SurfaceView` ready, the picture's size known) independently of which particular chunk
+  happens to be arriving at that moment. Built and tested wrong the first time: a decoder created
+  right as an ordinary (non-keyframe) chunk arrived would happily accept it as its first input,
+  even though a delta frame only means anything relative to a keyframe the decoder has already
+  seen — it accepted chunk after chunk, forever, and decoded nothing, ever, with no error from
+  Android at any point. Caught by checking, not assuming: logging exactly what bytes the encoder
+  sent and what bytes the decoder fed the codec, and finding the two did not start at the same
+  place. Fixed with an explicit "still waiting for a keyframe" flag on the decoder, cleared only
+  once one has actually been fed to the current codec instance — see `VideoDecoder.submit()`.
+
+A screen that never changes produces no new video frames at all (this is normal for any
+compositor-driven capture, not a bug), so the last keyframe is resent every few seconds regardless
+— both so a freshly connected or reconnected helper is never left looking at nothing, and as a
+safety net against a chunk lost to a slow connection (`ScreenShareService`'s keepalive timer).
+
 ## Known limitation: the ring can look briefly stale in the picture itself
 
 The Stop button, banner and pointer ring are real content drawn on his screen, so they are part of
@@ -132,8 +169,10 @@ these overlay windows from capture with `FLAG_SECURE`: on this Android version t
 `SessionOverlay.kt`). What is fixed: the specific case where switching from Point mode into "tap for
 them" left a ring stuck on his screen with no way to clear it at all — that ring is now cleared
 automatically the moment you switch. What remains is only the brief lag between clearing a ring and
-the next picture confirming it, bounded by ordinary frame latency. Likely improves naturally as part
-of any future move to a proper video pipeline (see the note on mirroring latency in the README).
+the next picture confirming it. The move to a live video pipeline (above) should make this lag
+considerably shorter in practice — a captured frame no longer waits on a software JPEG encode
+before it can be sent — but this has not been directly measured, only reasoned about from the
+architecture, so it is recorded here as expected rather than confirmed.
 
 ## Not verified
 
@@ -151,6 +190,13 @@ of any future move to a proper video pipeline (see the note on mirroring latency
   overlay is drawn over them.
 - Tested only on Android 16 emulators (two instances). Not yet on a real phone, an older
   Motorola, or Android 14/15.
+- **The video pipeline's actual latency has not been measured, only reasoned about.** Two
+  emulators on the same machine say nothing reliable about real network conditions, real encode
+  time on real (not emulated) video hardware, or how a real phone's thermal/power state affects a
+  sustained encode. What was verified is correctness — the picture, pointer ring, and remote tap
+  and swipe all work through the new pipeline, checked by watching the actual bytes the encoder
+  produced and the decoder consumed, not just by eye — not that it is fast on a real phone over a
+  real connection.
 - The relay's `/join` page (which hands a tapped link to the app) is tested only as a served page,
   not through a real browser. The app's side of that hand-off was tested by sending the same
   `yattubhaa://pair?...` link directly.

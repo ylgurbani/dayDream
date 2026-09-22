@@ -8,11 +8,8 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.graphics.Bitmap
-import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
-import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Handler
@@ -36,13 +33,12 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
-import java.io.ByteArrayOutputStream
 
 /** Whether a screen is being shared right now, for the screens that need to show it. */
 object ShareState {
@@ -55,6 +51,13 @@ object ShareState {
  * Sends a picture of the screen to the helper, for the length of one session only. Runs as a
  * visible foreground service, and shuts everything down (capture, overlay, notification) the
  * moment the session ends or either person taps Stop.
+ *
+ * The screen is captured straight into a hardware H.264 encoder (see [ScreenEncoder]): whatever
+ * the display compositor draws goes directly to the encoder's input surface, with no CPU bitmap
+ * copy and no per-frame JPEG encode in between, the way an earlier version of this worked. A
+ * still screen produces no new compositor frames at all (this is how screen mirroring generally
+ * works, not a bug), so the last keyframe is resent every few seconds regardless, both so a
+ * freshly connected or reconnected helper has something to decode promptly, and as a safety net.
  */
 class ScreenShareService : Service() {
     private val main = Handler(Looper.getMainLooper())
@@ -62,10 +65,10 @@ class ScreenShareService : Service() {
     private var thread: HandlerThread? = null
     private var projection: MediaProjection? = null
     private var display: VirtualDisplay? = null
-    private var reader: ImageReader? = null
+    private var encoder: ScreenEncoder? = null
     private var overlay: SessionOverlay? = null
-    private var lastFrameAt = 0L
-    private var lastJpeg: ByteArray? = null
+    private var lastKeyframe: ByteArray? = null
+    private var lastKeyframeSize = 0 to 0
     private var lastSentAt = 0L
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -108,24 +111,37 @@ class ScreenShareService : Service() {
         val h = (metrics.heightPixels * scale).toInt() and 1.inv()
         val worker = HandlerThread("yattu-capture").also { it.start(); thread = it }
         val handler = Handler(worker.looper)
-        val imageReader = ImageReader.newInstance(w, h, PixelFormat.RGBA_8888, 2).also { reader = it }
+
+        val enc = try {
+            ScreenEncoder(w, h, handler) { keyframe, cw, ch, bytes -> onChunk(session, keyframe, cw, ch, bytes) }
+        } catch (e: Exception) {
+            android.util.Log.e("ScreenShareService", "Encoder setup failed for ${w}x$h", e)
+            SessionHub.endNeedy("Could not start sharing on this phone.")
+            shutdown()
+            return
+        }
+        encoder = enc
+        enc.start()
         display = mp.createVirtualDisplay(
             "yattu-share", w, h, metrics.densityDpi, DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-            imageReader.surface, null, handler,
+            enc.inputSurface, null, handler,
         )
-        imageReader.setOnImageAvailableListener({ onFrame(session, it, w, h) }, handler)
-        // A perfectly still screen produces no new pictures, so resend the last one now and then.
-        handler.post(object : Runnable {
+        // A screen that never changes produces no new compositor frames, and hence nothing new
+        // to encode. Resending the last keyframe periodically means a freshly connected or
+        // reconnected helper — and one who missed a chunk to a network blip — is never left
+        // looking at nothing for long, without needing to hook into presence events to do it.
+        handler.postDelayed(object : Runnable {
             override fun run() {
-                val jpeg = lastJpeg
+                val jpeg = lastKeyframe
                 val now = SystemClock.elapsedRealtime()
                 if (jpeg != null && now - lastSentAt >= KEEPALIVE_MS) {
+                    val (kw, kh) = lastKeyframeSize
                     lastSentAt = now
-                    session.sendFrame(w, h, jpeg)
+                    session.sendVideoChunk(true, kw, kh, jpeg)
                 }
                 handler.postDelayed(this, KEEPALIVE_MS)
             }
-        })
+        }, KEEPALIVE_MS)
 
         overlay = SessionOverlay(this) {
             SessionHub.endNeedy("You stopped sharing.")
@@ -143,6 +159,12 @@ class ScreenShareService : Service() {
         scope.launch {
             session.state.map { it.controlState }.distinctUntilChanged().collect { onControlState(session, it) }
         }
+    }
+
+    private fun onChunk(session: NeedySession, keyframe: Boolean, w: Int, h: Int, bytes: ByteArray) {
+        if (keyframe) { lastKeyframe = bytes; lastKeyframeSize = w to h }
+        lastSentAt = SystemClock.elapsedRealtime()
+        session.sendVideoChunk(keyframe, w, h, bytes)
     }
 
     /** Keeps what is on his screen in step with whether the helper may tap for him. */
@@ -203,36 +225,15 @@ class ScreenShareService : Service() {
      */
     private fun sendToAccessibilitySettings() = ControlCapability.openAccessibilitySettings(this)
 
-    private fun onFrame(session: NeedySession, r: ImageReader, w: Int, h: Int) {
-        val image = try { r.acquireLatestImage() } catch (e: Exception) { null } ?: return
-        try {
-            val now = SystemClock.elapsedRealtime()
-            if (now - lastFrameAt < FRAME_INTERVAL_MS) return
-            lastFrameAt = now
-            val plane = image.planes[0]
-            val rowPixels = plane.rowStride / plane.pixelStride
-            val padded = Bitmap.createBitmap(rowPixels, h, Bitmap.Config.ARGB_8888)
-            padded.copyPixelsFromBuffer(plane.buffer)
-            val bitmap = if (rowPixels == w) padded else Bitmap.createBitmap(padded, 0, 0, w, h)
-            val out = ByteArrayOutputStream()
-            bitmap.compress(Bitmap.CompressFormat.JPEG, JPEG_QUALITY, out)
-            val jpeg = out.toByteArray()
-            lastJpeg = jpeg
-            lastSentAt = now
-            session.sendFrame(w, h, jpeg)
-        } finally {
-            image.close()
-        }
-    }
-
     private fun shutdown() {
         main.post {
             scope.cancel()
             overlay?.remove(); overlay = null
             display?.release(); display = null
-            reader?.close(); reader = null
+            encoder?.release(); encoder = null
             projection?.stop(); projection = null
             thread?.quitSafely(); thread = null
+            lastKeyframe = null
             ShareState.set(false)
             ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
             stopSelf()
@@ -268,10 +269,8 @@ class ScreenShareService : Service() {
         private const val EXTRA_DATA = "data"
         private const val CHANNEL_ID = "sharing"
         private const val NOTIFICATION_ID = 1
-        private const val TARGET_WIDTH = 540f
-        private const val JPEG_QUALITY = 50
-        private const val FRAME_INTERVAL_MS = 250L // about four pictures a second
-        private const val KEEPALIVE_MS = 2000L
+        private const val TARGET_WIDTH = 720f
+        private const val KEEPALIVE_MS = 3000L
         private const val FIRST_TIME_WAIT_MS = 3000L
         private const val RECONNECT_WAIT_MS = 8000L
 

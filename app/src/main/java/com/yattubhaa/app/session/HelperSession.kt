@@ -1,12 +1,13 @@
 package com.yattubhaa.app.session
 
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
+import android.os.Handler
+import android.os.Looper
 import com.yattubhaa.app.net.ControlState
 import com.yattubhaa.app.net.NavAction
 import com.yattubhaa.app.net.Protocol
 import com.yattubhaa.app.net.Role
 import com.yattubhaa.app.pairing.PairingStore
+import com.yattubhaa.app.service.VideoDecoder
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -25,8 +26,9 @@ data class HelperState(
     val message: String = "",
     /** True when the session ended because the typed number did not match. */
     val wrongCode: Boolean = false,
-    /** Latest picture of their screen, once they have chosen to share it. */
-    val frame: Bitmap? = null,
+    /** Width and height of their screen, once the first video chunk has arrived — the pixels
+     *  themselves go straight from [VideoDecoder] to the SurfaceView, never through this state. */
+    val frameSize: Pair<Int, Int>? = null,
     /** Where the helper last pointed, as fractions of the screen, or null. */
     val pointer: Pair<Float, Float>? = null,
     /** What their phone last said about control: asked, on, blocked, refused... */
@@ -37,6 +39,9 @@ data class HelperState(
 class HelperSession(pairing: PairingStore.Record, code: String) : BaseSession(Role.Helper, pairing, code) {
     private val _state = MutableStateFlow(HelperState(HelperPhase.Connecting, pairing.name))
     val state: StateFlow<HelperState> = _state.asStateFlow()
+
+    /** Feeds their mirrored screen straight to whatever SurfaceView the UI attaches. */
+    val videoDecoder = VideoDecoder(Handler(Looper.getMainLooper()))
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -72,9 +77,10 @@ class HelperSession(pairing: PairingStore.Record, code: String) : BaseSession(Ro
 
     override fun onMessage(message: Protocol.Message) {
         when (message) {
-            is Protocol.Message.Frame -> {
-                val bitmap = BitmapFactory.decodeByteArray(message.jpeg, 0, message.jpeg.size) ?: return
-                _state.value = _state.value.copy(frame = bitmap)
+            is Protocol.Message.VideoChunk -> {
+                val size = message.width to message.height
+                if (_state.value.frameSize != size) _state.value = _state.value.copy(frameSize = size)
+                videoDecoder.submit(message.keyframe, message.width, message.height, message.data)
             }
             // Only their phone decides whether control is on; this just shows what it said.
             is Protocol.Message.ControlStatus -> _state.value = _state.value.copy(controlState = message.state)
@@ -84,6 +90,7 @@ class HelperSession(pairing: PairingStore.Record, code: String) : BaseSession(Ro
 
     override fun onEnded(reason: String) {
         _state.value = _state.value.copy(phase = HelperPhase.Ended, message = reason, pointer = null)
+        videoDecoder.release()
         scope.cancel()
     }
 

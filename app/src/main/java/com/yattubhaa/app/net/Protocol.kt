@@ -22,7 +22,7 @@ enum class NavAction(val wire: Byte) { Back(1), Home(2), Recents(3), Notificatio
  * type byte followed by its payload; the whole thing is encrypted by [SecureChannel].
  * Positions are fractions of the screen sent as 0..10000.
  *
- *   FRAME          needy -> helper   width (2) | height (2) | JPEG bytes
+ *   VIDEO_CHUNK    needy -> helper   flags (1, bit0 = keyframe) | width (2) | height (2) | H.264
  *   POINTER        helper -> needy   x (2) | y (2); 0xFFFF, 0xFFFF clears the ring
  *   STOP           either            ends the session
  *   CONTROL_REQUEST  helper -> needy  ask to tap and swipe for them (they must say yes)
@@ -36,7 +36,7 @@ enum class NavAction(val wire: Byte) { Back(1), Home(2), Recents(3), Notificatio
  * ignores every control message unless it has said yes for this session.
  */
 object Protocol {
-    private const val FRAME: Byte = 1
+    private const val VIDEO_CHUNK: Byte = 1
     private const val POINTER: Byte = 2
     private const val STOP: Byte = 3
     private const val CONTROL_REQUEST: Byte = 4
@@ -52,7 +52,9 @@ object Protocol {
     const val MAX_SWIPE_MS = 2000
 
     sealed interface Message {
-        class Frame(val width: Int, val height: Int, val jpeg: ByteArray) : Message
+        /** One chunk of the H.264 stream. A decoder needs a keyframe before anything else makes
+         *  sense; everything before the first one it sees should be dropped. */
+        class VideoChunk(val keyframe: Boolean, val width: Int, val height: Int, val data: ByteArray) : Message
         /** Fractions of the screen, 0..1. Null means "remove the pointer". */
         data class Pointer(val x: Float?, val y: Float?) : Message
         data object Stop : Message
@@ -67,9 +69,11 @@ object Protocol {
 
     private fun scaled(v: Float) = (v.coerceIn(0f, 1f) * SCALE).toInt().toShort()
 
-    fun frame(width: Int, height: Int, jpeg: ByteArray): ByteArray =
-        ByteBuffer.allocate(5 + jpeg.size)
-            .put(FRAME).putShort(width.toShort()).putShort(height.toShort()).put(jpeg).array()
+    fun videoChunk(keyframe: Boolean, width: Int, height: Int, data: ByteArray): ByteArray =
+        ByteBuffer.allocate(6 + data.size)
+            .put(VIDEO_CHUNK).put(if (keyframe) 1 else 0)
+            .putShort(width.toShort()).putShort(height.toShort())
+            .put(data).array()
 
     fun pointer(x: Float, y: Float): ByteArray =
         ByteBuffer.allocate(5).put(POINTER).putShort(scaled(x)).putShort(scaled(y)).array()
@@ -99,13 +103,13 @@ object Protocol {
     fun parse(bytes: ByteArray): Message? {
         if (bytes.isEmpty()) return null
         return when (bytes[0]) {
-            FRAME -> {
-                if (bytes.size <= 5) return null
-                val buf = ByteBuffer.wrap(bytes, 1, 4)
+            VIDEO_CHUNK -> {
+                if (bytes.size <= 6) return null
+                val buf = ByteBuffer.wrap(bytes, 2, 4)
                 val w = buf.short.toInt() and 0xFFFF
                 val h = buf.short.toInt() and 0xFFFF
                 if (w == 0 || h == 0) return null
-                Message.Frame(w, h, bytes.copyOfRange(5, bytes.size))
+                Message.VideoChunk(bytes[1] != 0.toByte(), w, h, bytes.copyOfRange(6, bytes.size))
             }
             POINTER -> {
                 if (bytes.size != 5) return null

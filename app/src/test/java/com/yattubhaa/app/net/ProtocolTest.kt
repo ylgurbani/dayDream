@@ -2,6 +2,7 @@ package com.yattubhaa.app.net
 
 import com.yattubhaa.app.net.Protocol.Message
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -61,7 +62,22 @@ class ProtocolTest {
         near(0.5f, p.x!!)
         assertEquals(Message.Pointer(null, null), Protocol.parse(Protocol.clearPointer()))
         assertEquals(Message.Stop, Protocol.parse(Protocol.stop()))
-        val frame = Protocol.parse(Protocol.frame(540, 1200, byteArrayOf(1, 2, 3))) as Message.Frame
-        assertEquals(540, frame.width)
+    }
+
+    @Test
+    fun videoChunkRoundTripsAndKeepsItsKeyframeFlag() {
+        val key = Protocol.parse(Protocol.videoChunk(true, 720, 1600, byteArrayOf(9, 8, 7))) as Message.VideoChunk
+        assertTrue(key.keyframe)
+        assertEquals(720, key.width); assertEquals(1600, key.height)
+        assertEquals(listOf<Byte>(9, 8, 7), key.data.toList())
+
+        val delta = Protocol.parse(Protocol.videoChunk(false, 720, 1600, byteArrayOf(1))) as Message.VideoChunk
+        assertFalse(delta.keyframe)
+    }
+
+    @Test
+    fun videoChunkRejectsZeroDimensionsAndEmptyData() {
+        assertNull(Protocol.parse(Protocol.videoChunk(true, 0, 100, byteArrayOf(1))))
+        assertNull(Protocol.parse(Protocol.videoChunk(true, 100, 100, byteArrayOf())))
     }
 }

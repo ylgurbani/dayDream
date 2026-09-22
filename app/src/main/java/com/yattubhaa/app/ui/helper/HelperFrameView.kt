@@ -1,11 +1,12 @@
 package com.yattubhaa.app.ui.helper
 
-import android.graphics.Bitmap
-import androidx.compose.foundation.Image
+import android.view.SurfaceHolder
+import android.view.SurfaceView
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -15,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawingPadding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -27,16 +27,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import com.yattubhaa.app.net.ControlState
 import com.yattubhaa.app.net.NavAction
+import com.yattubhaa.app.service.VideoDecoder
 import com.yattubhaa.app.ui.components.BigButton
 import com.yattubhaa.app.ui.components.ButtonKind
 import kotlin.math.max
@@ -46,6 +46,11 @@ import kotlin.math.max
  *  - **Point** (always available): tap anywhere to put a ring on that spot on their screen.
  *  - **Control** (only once they have said yes): tap sends a tap, drag sends a swipe.
  *
+ * The picture itself is decoded straight onto a `SurfaceView` by [videoDecoder] — it never
+ * passes through Compose as a bitmap — with the pointer ring and gesture detection layered on
+ * top in an ordinary transparent Box the same size, which draws above the SurfaceView by default
+ * Android z-order (nothing here asks for `setZOrderOnTop`).
+ *
  * Kept deliberately more compact than the rest of the app: this is the one screen the helper
  * (not the person being helped) uses, so it trades some of the app's usual large-text, big-button
  * accessibility margin for more room to actually see and work with the mirrored screen.
@@ -53,7 +58,8 @@ import kotlin.math.max
 @Composable
 fun HelperFrameView(
     name: String,
-    frame: Bitmap,
+    frameSize: Pair<Int, Int>,
+    videoDecoder: VideoDecoder,
     pointer: Pair<Float, Float>?,
     controlState: ControlState,
     onPoint: (Float, Float) -> Unit,
@@ -83,7 +89,7 @@ fun HelperFrameView(
             modifier = Modifier.weight(1f).fillMaxWidth().padding(vertical = 4.dp),
             contentAlignment = Alignment.Center,
         ) {
-            val aspect = frame.width.toFloat() / frame.height
+            val aspect = frameSize.first.toFloat() / frameSize.second
             val fitWidth: Dp
             val fitHeight: Dp
             if (maxWidth / maxHeight < aspect) {
@@ -91,36 +97,51 @@ fun HelperFrameView(
             } else {
                 fitHeight = maxHeight; fitWidth = maxHeight * aspect
             }
-            Image(
-                bitmap = frame.asImageBitmap(),
-                contentDescription = "$name's screen.",
-                contentScale = ContentScale.Fit,
-                modifier = Modifier
-                    .size(fitWidth, fitHeight)
-                    .pointerInput(controlling) {
-                        if (controlling) {
-                            detectDragOrTap(
-                                onTap = { p -> onTap(p.x / size.width, p.y / size.height) },
-                                onSwipe = { s, e, ms ->
-                                    onSwipe(s.x / size.width, s.y / size.height, e.x / size.width, e.y / size.height, ms)
-                                },
-                            )
-                        } else {
-                            detectTapGestures { p -> onPoint(p.x / size.width, p.y / size.height) }
-                        }
-                    }
-                    .drawWithContent {
-                        drawContent()
-                        if (!controlling && pointer != null) {
-                            drawCircle(
-                                color = Color.Red,
-                                radius = 24.dp.toPx(),
-                                center = Offset(pointer.first * size.width, pointer.second * size.height),
-                                style = Stroke(width = 5.dp.toPx()),
-                            )
+            Box(Modifier.size(fitWidth, fitHeight)) {
+                AndroidView(
+                    factory = { ctx ->
+                        SurfaceView(ctx).apply {
+                            holder.addCallback(object : SurfaceHolder.Callback {
+                                override fun surfaceCreated(holder: SurfaceHolder) {
+                                    videoDecoder.attachSurface(holder.surface)
+                                }
+                                override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) = Unit
+                                override fun surfaceDestroyed(holder: SurfaceHolder) {
+                                    videoDecoder.detachSurface()
+                                }
+                            })
                         }
                     },
-            )
+                    modifier = Modifier.fillMaxSize(),
+                )
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .pointerInput(controlling) {
+                            if (controlling) {
+                                detectDragOrTap(
+                                    onTap = { p -> onTap(p.x / size.width, p.y / size.height) },
+                                    onSwipe = { s, e, ms ->
+                                        onSwipe(s.x / size.width, s.y / size.height, e.x / size.width, e.y / size.height, ms)
+                                    },
+                                )
+                            } else {
+                                detectTapGestures { p -> onPoint(p.x / size.width, p.y / size.height) }
+                            }
+                        }
+                        .drawWithContent {
+                            drawContent()
+                            if (!controlling && pointer != null) {
+                                drawCircle(
+                                    color = Color.Red,
+                                    radius = 24.dp.toPx(),
+                                    center = Offset(pointer.first * size.width, pointer.second * size.height),
+                                    style = Stroke(width = 5.dp.toPx()),
+                                )
+                            }
+                        },
+                )
+            }
         }
 
         val hasControl = controlState == ControlState.On || controlState == ControlState.Blocked
