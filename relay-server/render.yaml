@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: yattu-bhaa-relay
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      - key: TRUST_PROXY
+        value: "1"
+      - key: PORT
+        value: "8787"
