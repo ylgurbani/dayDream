@@ -270,7 +270,12 @@ class ScreenShareService : Service() {
         private const val CHANNEL_ID = "sharing"
         private const val NOTIFICATION_ID = 1
         private const val TARGET_WIDTH = 720f
-        private const val KEEPALIVE_MS = 3000L
+        // How long the picture can go quiet before the last keyframe is resent — this is what
+        // lets a helper whose first keyframe was missed (its SurfaceView not ready yet) catch up,
+        // without waiting on the screen to genuinely change again. Kept short: a resend only ever
+        // happens when nothing else has been sent for this long anyway, so a shorter interval
+        // costs bandwidth only in exactly the situations where catching up quickly matters.
+        private const val KEEPALIVE_MS = 1000L
         private const val FIRST_TIME_WAIT_MS = 3000L
         private const val RECONNECT_WAIT_MS = 8000L
 

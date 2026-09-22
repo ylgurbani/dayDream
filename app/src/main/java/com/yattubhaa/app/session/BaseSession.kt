@@ -143,6 +143,12 @@ abstract class BaseSession(
 
     private companion object {
         val RETRY_DELAYS_MS = longArrayOf(1500, 3000, 6000, 6000)
-        const val PEER_GONE_GRACE_MS = 15_000L
+        // Long enough to ride out a real shared blip (one or two retry attempts, 1.5-4.5s
+        // typically) without falsely declaring the other phone gone; short enough that an
+        // actually-closed app is not reported 15+ seconds late. The relay itself notices a
+        // closed connection and tells the other side almost instantly (see server.js's `ws.on
+        // ('close', ...)`), so this grace period is the dominant, directly controllable part of
+        // that total delay.
+        const val PEER_GONE_GRACE_MS = 8_000L
     }
 }

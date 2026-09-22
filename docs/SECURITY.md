@@ -42,9 +42,13 @@ not by reasoning about it in the abstract:
 - **The other phone is briefly not in the room.** Found a real bug here: each phone retries its own
   connection independently, so after a shared blip one of them typically rejoins a few seconds
   before the other. The first one back was treating the other's momentary absence as "they left"
-  and ending a session that was actually about to recover by itself. Fixed with a 15 second grace
-  period, but only *after* a session has been secured at least once — the ordinary "have not shown
-  up yet" case (nobody connected yet) still says so immediately, with no invented delay.
+  and ending a session that was actually about to recover by itself. Fixed with a grace period
+  (8 seconds — long enough for one or two retry attempts to reconnect, short enough that a phone
+  whose app genuinely closed is not reported 15+ seconds late, which real-device testing found the
+  original 15 second grace period was doing), but only *after* a session has been secured at least
+  once — the ordinary "have not shown up yet" case (nobody connected yet) still says so
+  immediately, with no invented delay. The relay itself notices a closed connection and tells the
+  other phone almost instantly; this grace period is the dominant part of the remaining delay.
 - **A connection attempt never completes at all** (their phone is off, its app closed mid-connect,
   or the number was never entered because they never got that far). Previously this left the
   helper's screen saying "Waiting for Grandad" forever with no way to know it was not going to
@@ -155,9 +159,11 @@ whichever turns out to be true on a given phone:
   once one has actually been fed to the current codec instance — see `VideoDecoder.submit()`.
 
 A screen that never changes produces no new video frames at all (this is normal for any
-compositor-driven capture, not a bug), so the last keyframe is resent every few seconds regardless
-— both so a freshly connected or reconnected helper is never left looking at nothing, and as a
-safety net against a chunk lost to a slow connection (`ScreenShareService`'s keepalive timer).
+compositor-driven capture, not a bug), so the last keyframe is resent whenever nothing new has
+gone out for a second (`ScreenShareService`'s keepalive timer) — both so a freshly connected or
+reconnected helper is never left looking at nothing for long, and as a safety net against a chunk
+lost to a slow connection. Tightened from an initial 3 seconds after real-device testing (two
+phones on different networks) found the wait before the first picture appeared noticeably long.
 
 ## Known limitation: the ring can look briefly stale in the picture itself
 
