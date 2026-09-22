@@ -175,13 +175,19 @@ class ScreenShareService : Service() {
         val grantedBefore = Prefs.accessibilityGrantedSinceLastOff
         scope.launch {
             // If he has switched it on before, Android just needs a moment to reconnect the
-            // service (longer on an older phone) — no need to send him to Settings, or touch
-            // the overlay, for what is really just a slow reconnect.
+            // service (longer on an older phone), so wait a bit longer before concluding it is
+            // genuinely gone — a slow reconnect should not feel the same as never granting it.
             val waitMs = if (grantedBefore) RECONNECT_WAIT_MS else FIRST_TIME_WAIT_MS
             withTimeoutOrNull(waitMs) { RemoteInput.connected.first { it } }
             val available = RemoteInput.isAvailable
             session.acceptControl()
-            if (!available && !grantedBefore) sendToAccessibilitySettings()
+            // Still not there after waiting: send him to turn it on, whether this is the first
+            // time or Android lost track of an earlier grant (it can: the system can revoke an
+            // accessibility service on its own, not only through "Turn off remote control").
+            // This used to be skipped for a return visit, back when it cost the overlay something
+            // to do this; now that sending him to Settings has no such cost any more, there is no
+            // reason to ever leave him stuck on "needs a setting" with no way to actually get there.
+            if (!available) sendToAccessibilitySettings()
         }
     }
 

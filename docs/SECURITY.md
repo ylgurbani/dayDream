@@ -28,6 +28,31 @@ deliberately does not do, and what is not yet verified.
 6. **No unattended access.** A connected session that never starts sharing closes itself after
    three minutes. There is no way for the helper to start anything.
 
+## Staying connected through a real blip
+
+Real networks drop for a moment — wifi switching, a brief DNS hiccup, the relay restarting. Three
+things were found by deliberately breaking the connection mid-session and watching what happened,
+not by reasoning about it in the abstract:
+
+- **This phone's own connection to the relay drops.** It is retried automatically (four attempts,
+  growing delay: 1.5s, 3s, 6s, 6s) before the session is actually ended. Verified by killing the
+  relay mid-session and restarting it five seconds later: the session picked back up on its own —
+  no message shown, no action needed, and a screen-share request made right after still worked,
+  proving the channel was genuinely re-established and not just showing a stale "connected" label.
+- **The other phone is briefly not in the room.** Found a real bug here: each phone retries its own
+  connection independently, so after a shared blip one of them typically rejoins a few seconds
+  before the other. The first one back was treating the other's momentary absence as "they left"
+  and ending a session that was actually about to recover by itself. Fixed with a 15 second grace
+  period, but only *after* a session has been secured at least once — the ordinary "have not shown
+  up yet" case (nobody connected yet) still says so immediately, with no invented delay.
+- **A connection attempt never completes at all** (their phone is off, its app closed mid-connect,
+  or the number was never entered because they never got that far). Previously this left the
+  helper's screen saying "Waiting for Grandad" forever with no way to know it was not going to
+  change on its own — confirmed by force-stopping the app on the other phone right as the helper
+  connected, and confirmed it does not recover on its own (18+ seconds of watching, nothing
+  changes; nothing in the code would ever have changed it). Fixed: after 25 seconds without
+  connecting, it now says so and offers to try again.
+
 ## What each capability needs from Android
 
 | Piece | Standing state on his phone | Ends when |
@@ -46,6 +71,14 @@ Settings trip again. So it stays on once he has turned it on, and he gets a one-
 removes it from Android's Accessibility list, with no visit to Settings. Any app that can check
 whether an accessibility service is enabled can see this state, whatever the app is called, and
 nothing here hides it.
+
+**Android, not just this app's own button, can take the accessibility switch away** — confirmed by
+clearing it directly rather than through "Turn off remote control", the same as if the system had
+revoked it on its own. When he next says Yes to a request, this app used to wait a few seconds and
+then just report "needs a setting" with no way to actually get to that setting, because it only
+offered the Settings trip the first time ever, never on a return visit. Fixed: tapping Allow now
+sends him to Settings whenever the switch is not actually on, first time or not — sending him there
+carries no cost any more (see below), so there is no reason left to ever leave him stuck.
 
 ## Remote tap and swipe: how it is contained
 

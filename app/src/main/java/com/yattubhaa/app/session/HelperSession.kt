@@ -7,9 +7,15 @@ import com.yattubhaa.app.net.NavAction
 import com.yattubhaa.app.net.Protocol
 import com.yattubhaa.app.net.Role
 import com.yattubhaa.app.pairing.PairingStore
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 
 enum class HelperPhase { Connecting, WaitingForPhone, Secured, Ended }
 
@@ -31,6 +37,20 @@ data class HelperState(
 class HelperSession(pairing: PairingStore.Record, code: String) : BaseSession(Role.Helper, pairing, code) {
     private val _state = MutableStateFlow(HelperState(HelperPhase.Connecting, pairing.name))
     val state: StateFlow<HelperState> = _state.asStateFlow()
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+    init {
+        // Without this, a phone that never shows up (off, out of range, or it dropped mid
+        // handshake — for example its app closed) leaves this screen saying "Waiting for
+        // Grandad" forever, with nothing to say that is not actually going to change.
+        scope.launch {
+            delay(CONNECT_TIMEOUT_MS)
+            if (_state.value.phase != HelperPhase.Secured) {
+                end("Could not connect to ${pairing.name}. Check they are still on the Get Help screen and try again.")
+            }
+        }
+    }
 
     override fun onPeer(present: Boolean) {
         val s = _state.value
@@ -64,6 +84,7 @@ class HelperSession(pairing: PairingStore.Record, code: String) : BaseSession(Ro
 
     override fun onEnded(reason: String) {
         _state.value = _state.value.copy(phase = HelperPhase.Ended, message = reason, pointer = null)
+        scope.cancel()
     }
 
     fun end(reason: String, notifyPeer: Boolean, wrongCode: Boolean) {
@@ -94,4 +115,8 @@ class HelperSession(pairing: PairingStore.Record, code: String) : BaseSession(Ro
     fun swipe(x1: Float, y1: Float, x2: Float, y2: Float, durationMs: Int) =
         send(Protocol.swipe(x1, y1, x2, y2, durationMs))
     fun navigate(action: NavAction) = send(Protocol.nav(action))
+
+    private companion object {
+        const val CONNECT_TIMEOUT_MS = 25_000L
+    }
 }
