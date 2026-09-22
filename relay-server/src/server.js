@@ -57,9 +57,14 @@ export function createRelay(overrides = {}) {
     port: Number(process.env.PORT || 8787),
     host: process.env.HOST || '0.0.0.0',
     trustProxy: process.env.TRUST_PROXY === '1',
-    maxMessageBytes: 2 * 1024 * 1024, // one JPEG screen frame, generously
+    maxMessageBytes: 2 * 1024 * 1024, // one video keyframe, generously
     joinTimeoutMs: 5000,
-    heartbeatMs: 30000,
+    // How this bounds the worst case a dead connection (not a clean close - a phone that lost
+    // its network entirely, or was killed in a way that skipped its own cleanup) is noticed:
+    // up to ~2x this, since a death right after a ping cycle waits a full cycle before the next
+    // one exposes it. Kept well under a minute so that worst case stays reasonable even when the
+    // app's own cleanup (ScreenShareService.onTaskRemoved) does not get a chance to run.
+    heartbeatMs: 10000,
     maxRooms: 1000,
     maxConnectionsPerIp: 10,
     maxMessagesPerSecond: 100,

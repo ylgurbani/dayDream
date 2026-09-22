@@ -56,6 +56,24 @@ not by reasoning about it in the abstract:
   connected, and confirmed it does not recover on its own (18+ seconds of watching, nothing
   changes; nothing in the code would ever have changed it). Fixed: after 25 seconds without
   connecting, it now says so and offers to try again.
+- **His app being swiped away from Recents while actively sharing** used to have no handling at
+  all — a real, meaningful gap, not a hypothetical one. Android does not stop a foreground service
+  just because its task was removed from Recents (deliberately: the same mechanism lets a music
+  player keep playing after being swiped away), so `ScreenShareService` kept running, invisibly,
+  with no signal to the helper that anything had happened — the helper would only find out once
+  the relay's own heartbeat eventually noticed the dead connection, or Android eventually reclaimed
+  the process, whichever came first, neither bounded or fast. Fixed two ways: `onTaskRemoved()`
+  now ends the session properly the moment the task is removed, sending the helper a clean
+  "stopped" message over the still-open connection — the same fast path as tapping Stop, not the
+  slow one — and, found only by reading real logcat timestamps rather than trusting a UI-polling
+  loop that turned out to have its own, misleading overhead under load: the helper's own video
+  decoder was being torn down *on the main thread*, and a slow decoder teardown (confirmed on an
+  emulator's software codec: several real seconds) blocked Compose from showing the "session
+  ended" screen it was itself in the middle of triggering, even though the underlying state had
+  already updated instantly. Moved the decoder onto its own thread, the same way the encoder
+  already worked. Verified with a screenshot taken a fixed short time after swiping the app away
+  from Recents (not a polling loop, which this exercise found could not be trusted for measuring
+  anything on this timescale): the helper's screen showed "Finished" within about two seconds.
 
 ## What each capability needs from Android
 
@@ -249,8 +267,7 @@ architecture, so it is recorded here as expected rather than confirmed.
   because Android disables its own "Allow" button while anything is drawn over it. It comes back once
   the switch is on, or after two minutes. Android's own red screen-sharing timer stays throughout.
 - Force-stopping the app (Settings > Apps > Force stop) makes Android switch its accessibility
-  service off, so he would have to turn it on again. I did not test what swiping the app away from
-  recent apps does.
+  service off, so he would have to turn it on again.
 - Long swipes and fast flicks are approximated: the path is a straight line over the time you took.
 
 ## What this app must not become

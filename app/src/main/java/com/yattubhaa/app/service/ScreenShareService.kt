@@ -93,6 +93,36 @@ class ScreenShareService : Service() {
         return START_NOT_STICKY
     }
 
+    /**
+     * The app being swiped away from Recents does **not** stop a foreground service on its own —
+     * that is deliberate Android behaviour, the same mechanism that lets a music player keep
+     * playing after being swiped away. Left alone, that means an accidental swipe-away keeps
+     * sharing his screen invisibly, and the helper only finds out once Android eventually reclaims
+     * the process on its own (unpredictable, and can be a long wait — the relay only notices a
+     * closed connection this way, no different from a real network loss, so the helper's own
+     * "disconnected" notice ends up waiting on a dead-connection timeout instead of a fast, clean
+     * close). This runs while the connection is still open, so [SessionHub.endNeedy] can send a
+     * proper "stopped" message the helper gets almost immediately, the same as tapping Stop
+     * would — not a several-, sometimes tens-of-seconds wait for the relay or its heartbeat to
+     * work out the connection is gone. Best effort: Android does not guarantee this callback runs
+     * at all if the process is killed outright rather than the task being removed normally.
+     */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        SessionHub.endNeedy("You closed the app.")
+        // The "stopped" message SessionHub.endNeedy just triggered is written to the socket
+        // asynchronously, on OkHttp's own thread, not this one — so returning immediately here
+        // is a real race against Android tearing the process down, and it can lose: measured on
+        // an emulator, sometimes the helper got the message in under a second, sometimes (when
+        // this race went the other way) the message never made it out and the helper fell all
+        // the way back to the relay noticing the dead connection plus its own grace period,
+        // several seconds slower. A brief, deliberate block here — imperceptible, since he has
+        // already swiped the app away and is not looking at it — gives that write a real chance
+        // to actually leave the phone before anything here tears the connection down itself.
+        Thread.sleep(400)
+        shutdown()
+    }
+
     private fun startCapture(session: NeedySession, resultCode: Int, data: Intent) {
         val manager = getSystemService(MediaProjectionManager::class.java)
         val mp = manager.getMediaProjection(resultCode, data)

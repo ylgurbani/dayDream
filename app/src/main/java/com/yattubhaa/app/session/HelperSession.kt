@@ -1,7 +1,7 @@
 package com.yattubhaa.app.session
 
 import android.os.Handler
-import android.os.Looper
+import android.os.HandlerThread
 import com.yattubhaa.app.net.ControlState
 import com.yattubhaa.app.net.NavAction
 import com.yattubhaa.app.net.Protocol
@@ -44,8 +44,15 @@ class HelperSession(pairing: PairingStore.Record, code: String) : BaseSession(Ro
     private val _state = MutableStateFlow(HelperState(HelperPhase.Connecting, pairing.name))
     val state: StateFlow<HelperState> = _state.asStateFlow()
 
-    /** Feeds their mirrored screen straight to whatever SurfaceView the UI attaches. */
-    val videoDecoder = VideoDecoder(Handler(Looper.getMainLooper()))
+    /** Feeds their mirrored screen straight to whatever SurfaceView the UI attaches. Given its
+     *  own thread, not the main one: found the hard way that `MediaCodec.stop()`/`release()` on
+     *  a decoder can itself take several real seconds on some devices (a software codec, on this
+     *  evidence), and running the decoder on the main thread meant that blocked Compose from
+     *  recomposing anything at all for that whole time — including the "session ended" screen
+     *  this very teardown is part of showing. A slow decoder teardown should never be able to
+     *  freeze the rest of the UI.  */
+    private val decoderThread = HandlerThread("yattu-decode").also { it.start() }
+    val videoDecoder = VideoDecoder(Handler(decoderThread.looper))
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -97,7 +104,11 @@ class HelperSession(pairing: PairingStore.Record, code: String) : BaseSession(Ro
 
     override fun onEnded(reason: String) {
         _state.value = _state.value.copy(phase = HelperPhase.Ended, message = reason, pointer = null)
+        // release() only posts the teardown to the decoder's own thread and returns immediately,
+        // so this state update reaching Compose is never held up by however long that teardown
+        // actually takes — see the comment on videoDecoder.
         videoDecoder.release()
+        decoderThread.quitSafely()
         scope.cancel()
     }
 
