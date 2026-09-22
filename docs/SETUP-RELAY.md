@@ -64,9 +64,19 @@ Render deploys from a GitHub repository, so this project needs to be on GitHub f
 3. In the Render dashboard: **New +** → **Blueprint** → pick the `yattu-bhaa` repo. Render reads
    `relay-server/render.yaml` (already in this project) and proposes one web service built from
    `relay-server/Dockerfile`. Click **Apply**.
-   - If you would rather not use a Blueprint: **New +** → **Web Service** → pick the repo →
-     set **Root Directory** to `relay-server` → **Runtime** to **Docker** → create it. Then add
-     the environment variable `TRUST_PROXY=1` yourself (the Blueprint already sets this).
+
+   **A path gotcha if you edit that file, or use the other method below:** Render always resolves
+   `dockerfilePath` and `dockerContext` **inside a `render.yaml`** relative to the repo root, no
+   matter where the `render.yaml` file itself lives. That's why the file says
+   `relay-server/Dockerfile`, not `./Dockerfile` — the shorter form builds with the whole repo
+   root as context, which has no top-level `Dockerfile` or `src/`, and fails with something like
+   "cannot find /src".
+
+   - If you'd rather not use a Blueprint: **New +** → **Web Service** → pick the repo → set
+     **Root Directory** to `relay-server` → **Runtime** to **Docker**. Here the convention is the
+     *opposite* of the Blueprint file: once Root Directory is set, **Dockerfile Path** is relative
+     to that root directory, so it should just be `Dockerfile` (not `relay-server/Dockerfile`).
+     Then add the environment variable `TRUST_PROXY=1` yourself (the Blueprint already sets this).
 4. Once it deploys, open `https://<the name Render gave it>.onrender.com/healthz`. It should say
    `ok`.
 5. In the app, use the relay address `wss://<the same name>.onrender.com`.

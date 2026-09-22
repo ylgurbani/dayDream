@@ -1,10 +1,13 @@
+# Paths below are relative to the REPO ROOT, not to this file's own location, even though this
+# file lives in relay-server/ — that's how Render's Blueprint spec resolves dockerfilePath and
+# dockerContext, and getting it wrong here is what makes a build fail with "cannot find /src".
 services:
   - type: web
     name: yattu-bhaa-relay
     runtime: docker
     plan: free
-    dockerfilePath: ./Dockerfile
-    dockerContext: .
+    dockerfilePath: relay-server/Dockerfile
+    dockerContext: relay-server
     envVars:
       - key: TRUST_PROXY
         value: "1"
