@@ -80,4 +80,9 @@ class ProtocolTest {
         assertNull(Protocol.parse(Protocol.videoChunk(true, 0, 100, byteArrayOf(1))))
         assertNull(Protocol.parse(Protocol.videoChunk(true, 100, 100, byteArrayOf())))
     }
+
+    @Test
+    fun sharingStartedRoundTrips() {
+        assertEquals(Message.SharingStarted, Protocol.parse(Protocol.sharingStarted()))
+    }
 }

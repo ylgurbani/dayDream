@@ -26,6 +26,10 @@ data class HelperState(
     val message: String = "",
     /** True when the session ended because the typed number did not match. */
     val wrongCode: Boolean = false,
+    /** True once they have started sharing — the picture itself may still be a moment away, but
+     *  this is enough to show "connecting" instead of leaving the screen looking like nothing
+     *  is happening. */
+    val sharingStarted: Boolean = false,
     /** Width and height of their screen, once the first video chunk has arrived — the pixels
      *  themselves go straight from [VideoDecoder] to the SurfaceView, never through this state. */
     val frameSize: Pair<Int, Int>? = null,
@@ -77,9 +81,12 @@ class HelperSession(pairing: PairingStore.Record, code: String) : BaseSession(Ro
 
     override fun onMessage(message: Protocol.Message) {
         when (message) {
+            Protocol.Message.SharingStarted -> _state.value = _state.value.copy(sharingStarted = true)
             is Protocol.Message.VideoChunk -> {
                 val size = message.width to message.height
-                if (_state.value.frameSize != size) _state.value = _state.value.copy(frameSize = size)
+                if (_state.value.frameSize != size) {
+                    _state.value = _state.value.copy(sharingStarted = true, frameSize = size)
+                }
                 videoDecoder.submit(message.keyframe, message.width, message.height, message.data)
             }
             // Only their phone decides whether control is on; this just shows what it said.

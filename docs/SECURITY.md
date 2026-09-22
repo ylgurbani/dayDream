@@ -107,6 +107,24 @@ carries no cost any more (see below), so there is no reason left to ever leave h
   secure app himself and the helper sends nothing further, the paused state does not clear on its
   own — there is no proactive recheck purely from the app changing on his screen, only from the
   next message actually being applied. Pressing one of the nav buttons is the reliable way out.
+- **Recovery from Unavailable is proactive, unlike Blocked, and this was a real bug on a real
+  device, not a hypothetical.** Android can rebind or restart the accessibility service entirely
+  on its own mid-session, well after he already said yes — confirmed by clearing the service
+  directly rather than through anything in this app, while a session already had control On.
+  Every gesture correctly reported Unavailable once that happened, exactly as designed, but
+  nothing ever un-reported it: an earlier version of the code that decides whether to even attempt
+  a gesture excluded Unavailable, on the reasoning that only On and Blocked were worth acting on —
+  which meant that once Android reconnected the service on its own, the very next gesture never
+  reached the check that would have noticed, because the exclusion stopped it first. The session
+  was stuck reporting Unavailable indefinitely, with no gesture, however many were sent, able to
+  fix it. Fixed two ways: that exclusion now only covers Off and Asked (genuine consent gates,
+  which must never be bypassed by a message alone) so a gesture arriving after the service is
+  back gets a fair, live re-check instead of being turned away on stale state; and separately, the
+  session now watches for the service reconnecting on its own and recovers immediately, with no
+  gesture needed at all. Verified on two emulators: granted control, revoked the service directly
+  (not through this app), confirmed every gesture including Back and Home correctly stopped
+  working, then re-granted it and confirmed the session recovered entirely on its own — no
+  message sent, no re-ask — and a Recent-apps gesture sent afterwards genuinely worked.
 
 ## What Android itself hides, not this app
 
@@ -163,7 +181,14 @@ compositor-driven capture, not a bug), so the last keyframe is resent whenever n
 gone out for a second (`ScreenShareService`'s keepalive timer) — both so a freshly connected or
 reconnected helper is never left looking at nothing for long, and as a safety net against a chunk
 lost to a slow connection. Tightened from an initial 3 seconds after real-device testing (two
-phones on different networks) found the wait before the first picture appeared noticeably long.
+phones on different networks, one deliberately left running for two minutes first to rule out a
+cold relay) found the wait before the first picture appeared noticeably long, and still does on a
+real network even with that ruled out. Since the exact remaining cause (real hardware codec
+warm-up, real network conditions, or something else) is not yet pinned down, a `SharingStarted`
+message is now sent the instant sharing begins, well before any picture could possibly have
+arrived, so the helper can show "connecting" rather than a screen that gives no sign anything is
+happening — improving what the wait *feels* like even where the wait itself has not been
+shortened further.
 
 ## Known limitation: the ring can look briefly stale in the picture itself
 

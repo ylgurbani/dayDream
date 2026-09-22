@@ -58,6 +58,12 @@ class NeedySession private constructor(pairing: PairingStore.Record, code: Strin
                 end("Nobody joined in time. Tap Get Help to try again.")
             }
         }
+        // Watches for the accessibility service coming back after Android rebinds or restarts
+        // it mid-session, so Unavailable recovers on its own rather than needing the helper to
+        // send another gesture first (see recheckAvailability).
+        scope.launch {
+            RemoteInput.connected.collect { if (it) recheckAvailability() }
+        }
     }
 
     override fun onPeer(present: Boolean) {
@@ -132,19 +138,42 @@ class NeedySession private constructor(pairing: PairingStore.Record, code: Strin
     /**
      * Applies one tap, swipe or nav message, and keeps this phone's own [controlState] (which
      * drives what he sees on his own screen, not just what the helper is told) in step with
-     * what actually happened. Reachable from Blocked too, so a Nav message can still get through
-     * while paused, and so recovery back to On is noticed the moment he leaves the secure app.
+     * what actually happened. Reachable from Blocked and Unavailable too, not just On:
+     *  - Blocked, so a Nav message can still get through while paused, and so recovery back to
+     *    On is noticed the moment he leaves the secure app.
+     *  - Unavailable, so a real bug found on a real device has a way out: Android can rebind or
+     *    restart the accessibility service mid-session on its own, which briefly makes
+     *    [RemoteInput] report unavailable even though he already said yes. Excluding Unavailable
+     *    here used to mean that once this happened, every future gesture was silently dropped
+     *    forever — this method itself is the only place anything re-checks whether the service
+     *    has come back, and it was never reached again. Only Off (never said yes) and Asked
+     *    (hasn't answered yet) are still excluded: those are consent gates, not capability
+     *    checks, and must never be bypassed by a message alone. See also [recheckAvailability].
      */
     private fun applyGesture(message: Protocol.Message) {
         val cs = _state.value.controlState
-        if (cs != ControlState.On && cs != ControlState.Blocked) return
+        if (cs == ControlState.Off || cs == ControlState.Asked) return
         when (RemoteInput.apply(message)) {
             RemoteInput.Result.Blocked -> setControl(ControlState.Blocked, tellPeer = true)
             RemoteInput.Result.Done -> setControl(ControlState.On, tellPeer = true)
             RemoteInput.Result.Unavailable ->
-                // They switched the accessibility setting off mid-session.
+                // They switched the accessibility setting off, or Android rebound the service,
+                // mid-session.
                 setControl(ControlState.Unavailable, tellPeer = true)
             RemoteInput.Result.Failed -> Unit // a one-off failure; leave the state as it is
+        }
+    }
+
+    /**
+     * Recovers from Unavailable the moment the accessibility service is actually back, without
+     * needing a gesture to arrive and trigger [applyGesture]'s own recovery — found on a real
+     * device: Android had rebound the service mid-session, and once [RemoteInput] came back on
+     * its own a few seconds later, nothing was watching for that, so the session stayed stuck
+     * reporting Unavailable indefinitely.
+     */
+    private fun recheckAvailability() {
+        if (_state.value.controlState == ControlState.Unavailable && RemoteInput.isAvailable) {
+            setControl(ControlState.On, tellPeer = true)
         }
     }
 
@@ -152,6 +181,10 @@ class NeedySession private constructor(pairing: PairingStore.Record, code: Strin
         _state.value = _state.value.copy(phase = NeedyPhase.Ended, message = reason)
         scope.cancel()
     }
+
+    /** Told once, the moment sharing begins, so the helper has something to show other than
+     *  silence while the actual picture is still on its way. */
+    fun notifySharingStarted() = send(Protocol.sharingStarted())
 
     /** Drops the chunk if the connection is behind, so a slow link catches up instead of
      *  building an ever-growing delay. Dropping a keyframe or a delta frame mid-stream can

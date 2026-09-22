@@ -23,6 +23,9 @@ enum class NavAction(val wire: Byte) { Back(1), Home(2), Recents(3), Notificatio
  * Positions are fractions of the screen sent as 0..10000.
  *
  *   VIDEO_CHUNK    needy -> helper   flags (1, bit0 = keyframe) | width (2) | height (2) | H.264
+ *   SHARING_STARTED needy -> helper  sharing has begun; the picture is on its way but has not
+ *                                    necessarily arrived yet, so the helper has something to show
+ *                                    other than silence while it does
  *   POINTER        helper -> needy   x (2) | y (2); 0xFFFF, 0xFFFF clears the ring
  *   STOP           either            ends the session
  *   CONTROL_REQUEST  helper -> needy  ask to tap and swipe for them (they must say yes)
@@ -46,6 +49,7 @@ object Protocol {
     private const val LONG_PRESS: Byte = 8
     private const val SWIPE: Byte = 9
     private const val NAV: Byte = 10
+    private const val SHARING_STARTED: Byte = 11
     private const val SCALE = 10000
     private const val CLEAR = 0xFFFF
     const val MIN_SWIPE_MS = 50
@@ -55,6 +59,8 @@ object Protocol {
         /** One chunk of the H.264 stream. A decoder needs a keyframe before anything else makes
          *  sense; everything before the first one it sees should be dropped. */
         class VideoChunk(val keyframe: Boolean, val width: Int, val height: Int, val data: ByteArray) : Message
+        /** Sharing has begun; the picture itself may still be a moment away. */
+        data object SharingStarted : Message
         /** Fractions of the screen, 0..1. Null means "remove the pointer". */
         data class Pointer(val x: Float?, val y: Float?) : Message
         data object Stop : Message
@@ -74,6 +80,8 @@ object Protocol {
             .put(VIDEO_CHUNK).put(if (keyframe) 1 else 0)
             .putShort(width.toShort()).putShort(height.toShort())
             .put(data).array()
+
+    fun sharingStarted(): ByteArray = byteArrayOf(SHARING_STARTED)
 
     fun pointer(x: Float, y: Float): ByteArray =
         ByteBuffer.allocate(5).put(POINTER).putShort(scaled(x)).putShort(scaled(y)).array()
@@ -111,6 +119,7 @@ object Protocol {
                 if (w == 0 || h == 0) return null
                 Message.VideoChunk(bytes[1] != 0.toByte(), w, h, bytes.copyOfRange(6, bytes.size))
             }
+            SHARING_STARTED -> if (bytes.size == 1) Message.SharingStarted else null
             POINTER -> {
                 if (bytes.size != 5) return null
                 val buf = ByteBuffer.wrap(bytes, 1, 4)

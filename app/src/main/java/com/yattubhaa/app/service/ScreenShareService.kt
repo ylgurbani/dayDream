@@ -149,6 +149,7 @@ class ScreenShareService : Service() {
         }.also { it.show() }
         ShareState.set(true)
         session.sharing = true
+        session.notifySharingStarted()
 
         scope.launch {
             session.state.collect { if (it.phase == NeedyPhase.Ended) shutdown() }

@@ -37,9 +37,16 @@ fun HelperSessionScreen(onExit: (wrongCode: Boolean) -> Unit) {
             val frameSize = state.frameSize
             if (frameSize == null) {
                 Screen(buttons = { BigButton("Stop", leave, kind = ButtonKind.Danger) }) {
-                    Heading("Connected to ${state.name}")
+                    Heading(if (state.sharingStarted) "Connecting to their screen" else "Connected to ${state.name}")
                     Gap()
-                    Body("Connected privately. Their screen will appear here once they choose to share it.")
+                    Body(
+                        if (state.sharingStarted) {
+                            "They have started sharing. The picture can take a few moments to " +
+                                "arrive — this is not stuck."
+                        } else {
+                            "Connected privately. Their screen will appear here once they choose to share it."
+                        },
+                    )
                 }
             } else {
                 HelperFrameView(
