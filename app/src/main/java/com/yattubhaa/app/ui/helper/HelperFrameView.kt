@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -30,8 +31,10 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.yattubhaa.app.net.ControlState
 import com.yattubhaa.app.net.NavAction
 import com.yattubhaa.app.ui.components.BigButton
@@ -42,6 +45,10 @@ import kotlin.math.max
  * Their screen, fitted whole into the space available. Two modes:
  *  - **Point** (always available): tap anywhere to put a ring on that spot on their screen.
  *  - **Control** (only once they have said yes): tap sends a tap, drag sends a swipe.
+ *
+ * Kept deliberately more compact than the rest of the app: this is the one screen the helper
+ * (not the person being helped) uses, so it trades some of the app's usual large-text, big-button
+ * accessibility margin for more room to actually see and work with the mirrored screen.
  */
 @Composable
 fun HelperFrameView(
@@ -60,12 +67,20 @@ fun HelperFrameView(
 ) {
     var wantControl by remember { mutableStateOf(false) }
     val controlling = controlState == ControlState.On && wantControl
+    val hasRing = pointer != null
 
-    Column(Modifier.fillMaxSize().safeDrawingPadding().padding(12.dp)) {
-        Text(controlStatusLine(name, controlState, wantControl), style = MaterialTheme.typography.bodyLarge)
+    fun switchToControl() {
+        // A ring left over from Point mode has no meaning once tapping for them starts, and
+        // there would be no way to clear it again until control is given back entirely.
+        if (hasRing) onClearPointer()
+        wantControl = true
+    }
+
+    Column(Modifier.fillMaxSize().safeDrawingPadding().padding(8.dp)) {
+        Text(controlStatusLine(name, controlState, wantControl), style = STATUS_STYLE)
 
         BoxWithConstraints(
-            modifier = Modifier.weight(1f).fillMaxWidth().padding(vertical = 8.dp),
+            modifier = Modifier.weight(1f).fillMaxWidth().padding(vertical = 4.dp),
             contentAlignment = Alignment.Center,
         ) {
             val aspect = frame.width.toFloat() / frame.height
@@ -110,45 +125,50 @@ fun HelperFrameView(
 
         val hasControl = controlState == ControlState.On || controlState == ControlState.Blocked
         if (hasControl) {
-            // Going back or home always works, even with a bank app open: it is how you get out of
-            // one. A 2x2 grid rather than one cramped row of four, since swiping down for the
-            // notification shade is otherwise nearly impossible to trigger through the mirror.
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                BigButton("Back", { onNavigate(NavAction.Back) }, Modifier.weight(1f), ButtonKind.Secondary, minHeight = 56.dp)
-                BigButton("Home", { onNavigate(NavAction.Home) }, Modifier.weight(1f), ButtonKind.Secondary, minHeight = 56.dp)
+            // Going back or home always works, even with a bank app open: it is how you get out
+            // of one.
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                NavButton("Back") { onNavigate(NavAction.Back) }
+                NavButton("Home") { onNavigate(NavAction.Home) }
+                NavButton("Recent") { onNavigate(NavAction.Recents) }
+                NavButton("Notif.") { onNavigate(NavAction.Notifications) }
             }
-            Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                BigButton("Recent", { onNavigate(NavAction.Recents) }, Modifier.weight(1f), ButtonKind.Secondary, minHeight = 56.dp)
-                BigButton("Notifications", { onNavigate(NavAction.Notifications) }, Modifier.weight(1f), ButtonKind.Secondary, minHeight = 56.dp)
-            }
-            Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (controlState == ControlState.On) {
-                    BigButton(
-                        if (wantControl) "Point instead" else "Tap for them",
-                        { wantControl = !wantControl }, Modifier.weight(1f), ButtonKind.Secondary, minHeight = 56.dp,
-                    )
+                    NavButton(if (wantControl) "Point instead" else "Tap for them") {
+                        if (wantControl) wantControl = false else switchToControl()
+                    }
                 }
-                BigButton(
-                    "Give back", { wantControl = false; onReleaseControl() },
-                    Modifier.weight(1f), ButtonKind.Secondary, minHeight = 56.dp,
-                )
+                NavButton("Clear ring", enabled = hasRing, onClick = onClearPointer)
+                NavButton("Give back") { wantControl = false; onReleaseControl() }
             }
         } else {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 when (controlState) {
-                    ControlState.Asked -> BigButton(
-                        "Waiting\u2026", {}, Modifier.weight(1f), ButtonKind.Secondary, enabled = false, minHeight = 56.dp,
-                    )
-                    else -> BigButton(
-                        "Ask to tap for them", onRequestControl, Modifier.weight(1f), ButtonKind.Secondary, minHeight = 56.dp,
-                    )
+                    ControlState.Asked -> NavButton("Waiting…", enabled = false) {}
+                    else -> NavButton("Ask to tap for them", onClick = onRequestControl)
                 }
-                BigButton("Clear ring", onClearPointer, Modifier.weight(1f), ButtonKind.Secondary, enabled = pointer != null, minHeight = 56.dp)
+                NavButton("Clear ring", enabled = hasRing, onClick = onClearPointer)
             }
         }
-        BigButton("Stop", onStop, Modifier.padding(top = 8.dp), ButtonKind.Danger, minHeight = 56.dp)
+        BigButton(
+            "Stop", onStop, Modifier.padding(top = 6.dp), ButtonKind.Danger,
+            minHeight = COMPACT_HEIGHT, textStyle = COMPACT_STYLE,
+        )
     }
 }
+
+@Composable
+private fun RowScope.NavButton(text: String, enabled: Boolean = true, onClick: () -> Unit) {
+    BigButton(
+        text, onClick, Modifier.weight(1f), ButtonKind.Secondary,
+        enabled = enabled, minHeight = COMPACT_HEIGHT, textStyle = COMPACT_STYLE,
+    )
+}
+
+private val COMPACT_HEIGHT = 40.dp
+private val COMPACT_STYLE = TextStyle(fontSize = 14.sp, lineHeight = 18.sp)
+private val STATUS_STYLE = TextStyle(fontSize = 15.sp, lineHeight = 19.sp)
 
 private fun controlStatusLine(name: String, state: ControlState, wantControl: Boolean) = when (state) {
     ControlState.Off -> "$name's screen. Tap to point."

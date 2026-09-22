@@ -186,21 +186,16 @@ class ScreenShareService : Service() {
     }
 
     /**
-     * Android ignores taps on its "allow full control" dialog while any other app is drawing over
-     * it, and our red Stop button and pointer layer are exactly that. So they are lifted while he
-     * is in Settings, and put back the moment the setting is on (or after a couple of minutes).
-     * Reached only the first time he ever turns this on, or after he has explicitly turned it
-     * off again — never for an ordinary reconnect, so the overlay otherwise stays up the whole
-     * time he is anywhere else in Settings (volume, notifications, app info, and so on).
+     * Sends him to the one Settings screen this app cannot avoid: turning the accessibility
+     * switch on for the first time, or again after "Turn off remote control". Nothing here
+     * touches the overlay any more. It used to be removed first, from an earlier, wrong
+     * assumption that Android would otherwise ignore the tap on "Allow" — tested since: Android
+     * already hides every overlay window, ours included, for as long as its own Settings app is
+     * in front (see docs/SECURITY.md), which already covers this exact dialog, and restores them
+     * the instant he leaves Settings. Removing our own overlay on top of that was pure redundant
+     * downtime for the Stop button and the pointer ring, for no benefit.
      */
-    private fun sendToAccessibilitySettings() {
-        overlay?.remove()
-        ControlCapability.openAccessibilitySettings(this)
-        scope.launch {
-            withTimeoutOrNull(SETTINGS_TRIP_MS) { RemoteInput.connected.first { it } }
-            if (ShareState.active.value) overlay?.show()
-        }
-    }
+    private fun sendToAccessibilitySettings() = ControlCapability.openAccessibilitySettings(this)
 
     private fun onFrame(session: NeedySession, r: ImageReader, w: Int, h: Int) {
         val image = try { r.acquireLatestImage() } catch (e: Exception) { null } ?: return
@@ -271,7 +266,6 @@ class ScreenShareService : Service() {
         private const val JPEG_QUALITY = 50
         private const val FRAME_INTERVAL_MS = 250L // about four pictures a second
         private const val KEEPALIVE_MS = 2000L
-        private const val SETTINGS_TRIP_MS = 2 * 60 * 1000L
         private const val FIRST_TIME_WAIT_MS = 3000L
         private const val RECONNECT_WAIT_MS = 8000L
 

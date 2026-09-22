@@ -20,6 +20,11 @@ import android.widget.TextView
  * What stays on top of other apps while a screen is being shared: a large red Stop button he can
  * always find, and the ring the helper points with. Both are removed the moment the session
  * ends. Must be used from the main thread, and only once "display over other apps" is allowed.
+ *
+ * These windows are real on-screen content, so the screen picture sent to the helper includes
+ * them too (the ring, the banner, the Stop button) — tried marking them FLAG_SECURE to keep them
+ * out of that picture, but on this Android version that blanks the *entire* captured frame to
+ * black, not just this window's own pixels, so that is not usable here.
  */
 class SessionOverlay(private val context: Context, private val onStop: () -> Unit) {
     private val windows = context.getSystemService(WindowManager::class.java)

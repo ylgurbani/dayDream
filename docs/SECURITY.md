@@ -73,17 +73,34 @@ nothing here hides it.
 
 ## What Android itself hides, not this app
 
-Tested on a real two-phone session: while Android's own Settings app is in the foreground, Android
-hides every overlay window from every app, ours included — the red Stop button and banner vanish,
-and come back the instant he leaves Settings. This was confirmed to be Android's own doing, not
-this app's: the same thing happens when Settings is opened by a command that never goes through any
-of this app's code at all. **Taps and swipes keep working the whole time** — only the visible
-overlay is hidden, tested by watching a real slider move while the overlay was invisible. This
-app never removes its own overlay for ordinary Settings use any more; it only does so once, for the
-one Settings screen it cannot avoid sending him to (turning the accessibility switch on for the
-first time, or again after "Turn off remote control"), because Android disables the "Allow" button
-on that specific screen while any overlay is present. A slow reconnect after that is no longer
-mistaken for "never granted": it now just waits longer before giving up.
+While Android's own Settings app is in the foreground, Android hides every overlay window from
+every app, ours included — the red Stop button, banner and pointer ring vanish, and come back the
+instant he leaves Settings. Confirmed to be Android's own doing, not this app's, by opening Settings
+with a command that never touches this app's code at all and watching the same thing happen.
+**Taps and swipes keep working the whole time** — only the visible overlay is hidden, confirmed by
+watching a real slider move while it was invisible.
+
+This app used to remove its own overlay by hand before sending him to turn the accessibility switch
+on, from an assumption that Android would otherwise ignore the tap on "Allow" (it does, if another
+app's overlay is actually visible and drawn — that assumption was correct in general, just
+unnecessary here). Tested since: Android's own Settings-foreground hiding already covers that exact
+dialog, so removing our overlay on top of it only cost him the Stop button and the pointer ring for
+no benefit. The app no longer touches the overlay for this at all — it always stays "on"; Android
+decides moment to moment whether to actually draw it, correctly and more precisely than any timer
+this app could set.
+
+## Known limitation: the ring can look briefly stale in the picture itself
+
+The Stop button, banner and pointer ring are real content drawn on his screen, so they are part of
+what the mirrored picture captures — including the ring, which means the picture can keep showing
+it for a moment after "Clear ring" until the next captured frame reaches the helper. Tried excluding
+these overlay windows from capture with `FLAG_SECURE`: on this Android version that blanks the
+*entire* captured frame to black, not just that window's own pixels, so it was reverted (see
+`SessionOverlay.kt`). What is fixed: the specific case where switching from Point mode into "tap for
+them" left a ring stuck on his screen with no way to clear it at all — that ring is now cleared
+automatically the moment you switch. What remains is only the brief lag between clearing a ring and
+the next picture confirming it, bounded by ordinary frame latency. Likely improves naturally as part
+of any future move to a proper video pipeline (see the note on mirroring latency in the README).
 
 ## Not verified
 

@@ -22,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -62,11 +63,12 @@ fun BigButton(
     kind: ButtonKind = ButtonKind.Primary,
     enabled: Boolean = true,
     minHeight: Dp = 80.dp,
+    textStyle: TextStyle = MaterialTheme.typography.labelLarge,
 ) {
     val shape = RoundedCornerShape(20.dp)
     val size = modifier.fillMaxWidth().heightIn(min = minHeight)
     val label = @Composable {
-        Text(text = text, style = MaterialTheme.typography.labelLarge, textAlign = TextAlign.Center)
+        Text(text = text, style = textStyle, textAlign = TextAlign.Center)
     }
     when (kind) {
         ButtonKind.Secondary -> OutlinedButton(
