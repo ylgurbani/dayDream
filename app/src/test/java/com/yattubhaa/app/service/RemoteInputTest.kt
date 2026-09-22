@@ -1,6 +1,7 @@
 package com.yattubhaa.app.service
 
 import com.yattubhaa.app.net.NavAction
+import com.yattubhaa.app.net.Protocol
 import com.yattubhaa.app.net.Protocol.Message
 import com.yattubhaa.app.service.RemoteInput.Result
 import org.junit.After
@@ -9,12 +10,14 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
+private val SWIPE_PATH = listOf(Protocol.Point(0.5f, 0.8f), Protocol.Point(0.5f, 0.2f))
+
 private class FakeTarget(var visible: List<String>? = listOf("com.android.chrome")) : RemoteInputTarget {
     val log = mutableListOf<String>()
     override fun visiblePackages(): List<String>? = visible
     var succeed = true
     override fun tap(x: Float, y: Float, longPress: Boolean): Boolean { log += if (longPress) "long" else "tap"; return succeed }
-    override fun swipe(x1: Float, y1: Float, x2: Float, y2: Float, durationMs: Int): Boolean { log += "swipe"; return succeed }
+    override fun gesturePath(points: List<Protocol.Point>, durationMs: Int): Boolean { log += "swipe"; return succeed }
     override fun navigate(action: NavAction): Boolean { log += "nav:$action"; return succeed }
 }
 
@@ -36,7 +39,7 @@ class RemoteInputTest {
         target.visible = listOf("com.android.chrome")
         assertEquals(Result.Done, RemoteInput.apply(Message.Tap(0.1f, 0.2f)))
         assertEquals(Result.Done, RemoteInput.apply(Message.LongPress(0.1f, 0.2f)))
-        assertEquals(Result.Done, RemoteInput.apply(Message.Swipe(0.5f, 0.8f, 0.5f, 0.2f, 300)))
+        assertEquals(Result.Done, RemoteInput.apply(Message.GesturePath(SWIPE_PATH, 300)))
         assertEquals(listOf("tap", "long", "swipe"), target.log)
     }
 
@@ -46,7 +49,7 @@ class RemoteInputTest {
         target.visible = listOf("net.one97.paytm")
         assertEquals(Result.Blocked, RemoteInput.apply(Message.Tap(0.5f, 0.5f)))
         assertEquals(Result.Blocked, RemoteInput.apply(Message.LongPress(0.5f, 0.5f)))
-        assertEquals(Result.Blocked, RemoteInput.apply(Message.Swipe(0f, 0f, 1f, 1f, 200)))
+        assertEquals(Result.Blocked, RemoteInput.apply(Message.GesturePath(SWIPE_PATH, 200)))
         assertTrue("nothing must reach the phone", target.log.isEmpty())
         assertEquals(Result.Done, RemoteInput.apply(Message.Nav(NavAction.Home)))
         assertEquals(listOf("nav:Home"), target.log)
@@ -66,7 +69,7 @@ class RemoteInputTest {
         RemoteInput.attach(target)
         target.visible = null
         assertEquals(Result.Blocked, RemoteInput.apply(Message.Tap(0.5f, 0.5f)))
-        assertEquals(Result.Blocked, RemoteInput.apply(Message.Swipe(0f, 0f, 1f, 1f, 200)))
+        assertEquals(Result.Blocked, RemoteInput.apply(Message.GesturePath(SWIPE_PATH, 200)))
         assertEquals(Result.Done, RemoteInput.apply(Message.Nav(NavAction.Home)))
         assertEquals(listOf("nav:Home"), target.log)
     }

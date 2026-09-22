@@ -8,6 +8,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityWindowInfo
 import com.yattubhaa.app.data.Prefs
 import com.yattubhaa.app.net.NavAction
+import com.yattubhaa.app.net.Protocol
 
 /**
  * Lets a connected helper tap, swipe and press Back/Home on this phone, but only when the person
@@ -67,10 +68,19 @@ class RemoteInputAccessibilityService : AccessibilityService(), RemoteInputTarge
         return dispatch(Path().apply { moveTo(px, py) }, if (longPress) LONG_PRESS_MS else TAP_MS)
     }
 
-    override fun swipe(x1: Float, y1: Float, x2: Float, y2: Float, durationMs: Int): Boolean {
-        val (sx, sy) = toPixels(x1, y1)
-        val (ex, ey) = toPixels(x2, y2)
-        return dispatch(Path().apply { moveTo(sx, sy); lineTo(ex, ey) }, durationMs.toLong())
+    /** Traces the actual path a dragged finger took, not just a straight line between its ends
+     *  — needed for anything that reads the shape or direction of the drag itself, such as
+     *  reordering a list by dragging an item past its neighbours. [points] always has at least
+     *  two entries (see [RemoteInputTarget.gesturePath]). */
+    override fun gesturePath(points: List<Protocol.Point>, durationMs: Int): Boolean {
+        val path = Path()
+        val (startX, startY) = toPixels(points[0].x, points[0].y)
+        path.moveTo(startX, startY)
+        for (i in 1 until points.size) {
+            val (px, py) = toPixels(points[i].x, points[i].y)
+            path.lineTo(px, py)
+        }
+        return dispatch(path, durationMs.toLong())
     }
 
     override fun navigate(action: NavAction): Boolean = performGlobalAction(

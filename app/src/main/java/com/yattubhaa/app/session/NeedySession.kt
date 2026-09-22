@@ -1,5 +1,6 @@
 package com.yattubhaa.app.session
 
+import com.yattubhaa.app.net.ConnectionQuality
 import com.yattubhaa.app.net.ControlState
 import com.yattubhaa.app.net.Protocol
 import com.yattubhaa.app.net.Role
@@ -108,7 +109,7 @@ class NeedySession private constructor(pairing: PairingStore.Record, code: Strin
                     _state.value = _state.value.copy(controlState = ControlState.Asked)
             }
             is Protocol.Message.ControlRelease -> setControl(ControlState.Off, tellPeer = false)
-            is Protocol.Message.Tap, is Protocol.Message.LongPress, is Protocol.Message.Swipe, is Protocol.Message.Nav ->
+            is Protocol.Message.Tap, is Protocol.Message.LongPress, is Protocol.Message.GesturePath, is Protocol.Message.Nav ->
                 applyGesture(message)
             else -> Unit
         }
@@ -185,6 +186,13 @@ class NeedySession private constructor(pairing: PairingStore.Record, code: Strin
     /** Told once, the moment sharing begins, so the helper has something to show other than
      *  silence while the actual picture is still on its way. */
     fun notifySharingStarted() = send(Protocol.sharingStarted())
+
+    /** How much of the picture is queued but not yet actually out the door — the same signal
+     *  [ScreenShareService]'s bitrate adaptation and connection-quality reporting are both
+     *  built on, so both react to the one real thing they can measure about the connection. */
+    fun outgoingBacklogBytes(): Long = backlogBytes()
+
+    fun sendConnectionQuality(quality: ConnectionQuality) = send(Protocol.connectionQuality(quality))
 
     /** Drops the chunk if the connection is behind, so a slow link catches up instead of
      *  building an ever-growing delay. Dropping a keyframe or a delta frame mid-stream can

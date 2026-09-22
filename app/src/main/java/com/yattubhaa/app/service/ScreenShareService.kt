@@ -58,6 +58,11 @@ object ShareState {
  * still screen produces no new compositor frames at all (this is how screen mirroring generally
  * works, not a bug), so the last keyframe is resent every few seconds regardless, both so a
  * freshly connected or reconnected helper has something to decode promptly, and as a safety net.
+ *
+ * The bitrate is not fixed: [BitrateAdapter] samples how much picture is still queued but not
+ * yet actually sent, and adjusts the encoder's target to fit — lower on a struggling connection
+ * so it can keep up rather than fall further behind, higher on a comfortable one so the picture
+ * is not needlessly soft. The same signal is what the helper sees as a connection-quality hint.
  */
 class ScreenShareService : Service() {
     private val main = Handler(Looper.getMainLooper())
@@ -66,6 +71,7 @@ class ScreenShareService : Service() {
     private var projection: MediaProjection? = null
     private var display: VirtualDisplay? = null
     private var encoder: ScreenEncoder? = null
+    private var bitrateAdapter: BitrateAdapter? = null
     private var overlay: SessionOverlay? = null
     private var lastKeyframe: ByteArray? = null
     private var lastKeyframeSize = 0 to 0
@@ -142,8 +148,14 @@ class ScreenShareService : Service() {
         val worker = HandlerThread("yattu-capture").also { it.start(); thread = it }
         val handler = Handler(worker.looper)
 
+        val adapter = BitrateAdapter(
+            onBitrateChanged = { encoder?.setBitrate(it) },
+            onQualityChanged = { session.sendConnectionQuality(it) },
+        )
+        bitrateAdapter = adapter
+
         val enc = try {
-            ScreenEncoder(w, h, handler) { keyframe, cw, ch, bytes -> onChunk(session, keyframe, cw, ch, bytes) }
+            ScreenEncoder(w, h, adapter.bitrate, handler) { keyframe, cw, ch, bytes -> onChunk(session, keyframe, cw, ch, bytes) }
         } catch (e: Exception) {
             android.util.Log.e("ScreenShareService", "Encoder setup failed for ${w}x$h", e)
             SessionHub.endNeedy("Could not start sharing on this phone.")
@@ -172,6 +184,16 @@ class ScreenShareService : Service() {
                 handler.postDelayed(this, KEEPALIVE_MS)
             }
         }, KEEPALIVE_MS)
+        // How much of the picture is still queued but not yet actually sent is the one real
+        // signal available for how the connection is coping right now; sampling it periodically
+        // and feeding it to the adapter is what lets the bitrate (and the quality shown to the
+        // helper) track a real network instead of staying fixed at a guess made once at the start.
+        handler.postDelayed(object : Runnable {
+            override fun run() {
+                adapter.onSample(session.outgoingBacklogBytes())
+                handler.postDelayed(this, BITRATE_SAMPLE_MS)
+            }
+        }, BITRATE_SAMPLE_MS)
 
         overlay = SessionOverlay(this) {
             SessionHub.endNeedy("You stopped sharing.")
@@ -262,6 +284,7 @@ class ScreenShareService : Service() {
             overlay?.remove(); overlay = null
             display?.release(); display = null
             encoder?.release(); encoder = null
+            bitrateAdapter = null
             projection?.stop(); projection = null
             thread?.quitSafely(); thread = null
             lastKeyframe = null
@@ -307,6 +330,10 @@ class ScreenShareService : Service() {
         // happens when nothing else has been sent for this long anyway, so a shorter interval
         // costs bandwidth only in exactly the situations where catching up quickly matters.
         private const val KEEPALIVE_MS = 1000L
+        // How often the outgoing backlog is sampled to drive BitrateAdapter. Frequent enough to
+        // react to a real change in the connection within a few seconds; infrequent enough that
+        // one big-but-brief frame (a fresh keyframe, say) does not look like sustained congestion.
+        private const val BITRATE_SAMPLE_MS = 2000L
         private const val FIRST_TIME_WAIT_MS = 3000L
         private const val RECONNECT_WAIT_MS = 8000L
 

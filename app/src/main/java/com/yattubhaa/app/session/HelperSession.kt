@@ -2,6 +2,7 @@ package com.yattubhaa.app.session
 
 import android.os.Handler
 import android.os.HandlerThread
+import com.yattubhaa.app.net.ConnectionQuality
 import com.yattubhaa.app.net.ControlState
 import com.yattubhaa.app.net.NavAction
 import com.yattubhaa.app.net.Protocol
@@ -33,6 +34,10 @@ data class HelperState(
     /** Width and height of their screen, once the first video chunk has arrived — the pixels
      *  themselves go straight from [VideoDecoder] to the SurfaceView, never through this state. */
     val frameSize: Pair<Int, Int>? = null,
+    /** How well their phone's own connection seems to be keeping up, as it judges it — shown
+     *  only to the helper. Starts optimistic rather than unknown, so nothing alarming flashes up
+     *  before the first real reading arrives. */
+    val connectionQuality: ConnectionQuality = ConnectionQuality.Good,
     /** Where the helper last pointed, as fractions of the screen, or null. */
     val pointer: Pair<Float, Float>? = null,
     /** What their phone last said about control: asked, on, blocked, refused... */
@@ -89,6 +94,7 @@ class HelperSession(pairing: PairingStore.Record, code: String) : BaseSession(Ro
     override fun onMessage(message: Protocol.Message) {
         when (message) {
             Protocol.Message.SharingStarted -> _state.value = _state.value.copy(sharingStarted = true)
+            is Protocol.Message.Connection -> _state.value = _state.value.copy(connectionQuality = message.quality)
             is Protocol.Message.VideoChunk -> {
                 val size = message.width to message.height
                 if (_state.value.frameSize != size) {
@@ -137,8 +143,9 @@ class HelperSession(pairing: PairingStore.Record, code: String) : BaseSession(Ro
     /** These only do anything once their phone has said yes; it ignores them otherwise. */
     fun tap(x: Float, y: Float) = send(Protocol.tap(x, y))
     fun longPress(x: Float, y: Float) = send(Protocol.longPress(x, y))
-    fun swipe(x1: Float, y1: Float, x2: Float, y2: Float, durationMs: Int) =
-        send(Protocol.swipe(x1, y1, x2, y2, durationMs))
+    /** [points] is the actual path a dragged finger took, not just where it started and ended —
+     *  see [Protocol.gesturePath]. */
+    fun gesturePath(points: List<Protocol.Point>, durationMs: Int) = send(Protocol.gesturePath(points, durationMs))
     fun navigate(action: NavAction) = send(Protocol.nav(action))
 
     private companion object {

@@ -16,7 +16,9 @@ interface RemoteInputTarget {
      */
     fun visiblePackages(): List<String>?
     fun tap(x: Float, y: Float, longPress: Boolean): Boolean
-    fun swipe(x1: Float, y1: Float, x2: Float, y2: Float, durationMs: Int): Boolean
+    /** [points] is the whole path a dragged finger took, not just where it started and ended —
+     *  at least two points, fractions of the screen. */
+    fun gesturePath(points: List<Protocol.Point>, durationMs: Int): Boolean
     fun navigate(action: NavAction): Boolean
 }
 
@@ -61,7 +63,7 @@ object RemoteInput {
         val ok = when (message) {
             is Protocol.Message.Tap -> t.tap(message.x, message.y, longPress = false)
             is Protocol.Message.LongPress -> t.tap(message.x, message.y, longPress = true)
-            is Protocol.Message.Swipe -> t.swipe(message.x1, message.y1, message.x2, message.y2, message.durationMs)
+            is Protocol.Message.GesturePath -> t.gesturePath(message.points, message.durationMs)
             else -> return Result.Failed
         }
         return if (ok) Result.Done else Result.Failed

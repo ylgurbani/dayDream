@@ -25,6 +25,7 @@ import android.view.Surface
 class ScreenEncoder(
     private val width: Int,
     private val height: Int,
+    initialBitRate: Int,
     callbackHandler: Handler,
     private val onChunk: (keyframe: Boolean, width: Int, height: Int, data: ByteArray) -> Unit,
 ) {
@@ -37,7 +38,7 @@ class ScreenEncoder(
     init {
         val format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, width, height).apply {
             setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
-            setInteger(MediaFormat.KEY_BIT_RATE, BIT_RATE)
+            setInteger(MediaFormat.KEY_BIT_RATE, initialBitRate)
             setInteger(MediaFormat.KEY_FRAME_RATE, FRAME_RATE)
             setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, I_FRAME_INTERVAL_SECONDS)
             // Deliberately not requesting a bitrate mode (e.g. CBR): unlike the other keys here,
@@ -61,6 +62,12 @@ class ScreenEncoder(
     /** Asks for a fresh keyframe soon — useful right when a viewer newly needs one. */
     fun requestKeyframe() {
         runCatching { codec.setParameters(Bundle().apply { putInt(MediaCodec.PARAMETER_KEY_REQUEST_SYNC_FRAME, 0) }) }
+    }
+
+    /** Changes the target bitrate of the running encoder — `MediaCodec` supports this live, no
+     *  need to reconfigure or recreate anything. See [BitrateAdapter], which drives this. */
+    fun setBitrate(bitRate: Int) {
+        runCatching { codec.setParameters(Bundle().apply { putInt(MediaCodec.PARAMETER_KEY_VIDEO_BITRATE, bitRate) }) }
     }
 
     fun release() {
@@ -98,7 +105,6 @@ class ScreenEncoder(
     }
 
     private companion object {
-        const val BIT_RATE = 1_600_000 // ~1.6 Mbps: comfortable for a mostly-static phone screen
         const val FRAME_RATE = 15
         const val I_FRAME_INTERVAL_SECONDS = 2
     }

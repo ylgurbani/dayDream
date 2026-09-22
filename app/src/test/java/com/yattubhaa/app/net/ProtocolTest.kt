@@ -19,12 +19,35 @@ class ProtocolTest {
     }
 
     @Test
-    fun swipeRoundTripsAndClampsItsDuration() {
-        val swipe = Protocol.parse(Protocol.swipe(0.1f, 0.8f, 0.1f, 0.2f, 400)) as Message.Swipe
-        near(0.1f, swipe.x1); near(0.8f, swipe.y1); near(0.2f, swipe.y2)
-        assertEquals(400, swipe.durationMs)
-        assertEquals(Protocol.MIN_SWIPE_MS, (Protocol.parse(Protocol.swipe(0f, 0f, 1f, 1f, 1)) as Message.Swipe).durationMs)
-        assertEquals(Protocol.MAX_SWIPE_MS, (Protocol.parse(Protocol.swipe(0f, 0f, 1f, 1f, 60000)) as Message.Swipe).durationMs)
+    fun gesturePathRoundTripsAndClampsItsDuration() {
+        val pts = listOf(Protocol.Point(0.1f, 0.8f), Protocol.Point(0.3f, 0.5f), Protocol.Point(0.1f, 0.2f))
+        val path = Protocol.parse(Protocol.gesturePath(pts, 400)) as Message.GesturePath
+        assertEquals(3, path.points.size)
+        near(0.1f, path.points[0].x); near(0.8f, path.points[0].y)
+        near(0.3f, path.points[1].x)
+        near(0.1f, path.points[2].x); near(0.2f, path.points[2].y)
+        assertEquals(400, path.durationMs)
+        val twoPts = listOf(Protocol.Point(0f, 0f), Protocol.Point(1f, 1f))
+        assertEquals(Protocol.MIN_SWIPE_MS, (Protocol.parse(Protocol.gesturePath(twoPts, 1)) as Message.GesturePath).durationMs)
+        assertEquals(Protocol.MAX_SWIPE_MS, (Protocol.parse(Protocol.gesturePath(twoPts, 60000)) as Message.GesturePath).durationMs)
+    }
+
+    @Test
+    fun gesturePathIsThinnedButKeepsTheExactLiftOffPoint() {
+        val lastPoint = Protocol.Point(0.9f, 0.05f)
+        val pts = (0 until 200).map { Protocol.Point(it / 200f, it / 200f) } + lastPoint
+        val path = Protocol.parse(Protocol.gesturePath(pts, 500)) as Message.GesturePath
+        assertEquals(Protocol.MAX_PATH_POINTS, path.points.size)
+        near(lastPoint.x, path.points.last().x); near(lastPoint.y, path.points.last().y)
+    }
+
+    @Test
+    fun gesturePathPadsFewerThanTwoPointsRatherThanProduceAMeaninglessMessage() {
+        val one = Protocol.parse(Protocol.gesturePath(listOf(Protocol.Point(0.4f, 0.6f)), 200)) as Message.GesturePath
+        assertEquals(2, one.points.size)
+        near(0.4f, one.points[0].x); near(0.4f, one.points[1].x)
+        val none = Protocol.parse(Protocol.gesturePath(emptyList(), 200)) as Message.GesturePath
+        assertEquals(2, none.points.size)
     }
 
     @Test
@@ -39,20 +62,24 @@ class ProtocolTest {
     fun outOfRangeCoordinatesAreRejected() {
         val bad = Protocol.tap(0.5f, 0.5f).also { it[1] = 0x7F; it[2] = 0x7F } // 32639 > 10000
         assertNull(Protocol.parse(bad))
-        val swipe = Protocol.swipe(0.1f, 0.1f, 0.2f, 0.2f, 300).also { it[7] = 0x7F }
-        assertNull(Protocol.parse(swipe))
+        val pts = listOf(Protocol.Point(0.1f, 0.1f), Protocol.Point(0.2f, 0.2f))
+        val path = Protocol.gesturePath(pts, 300).also { it[2] = 0x7F }
+        assertNull(Protocol.parse(path))
     }
 
     @Test
     fun wrongLengthsAndUnknownValuesAreRejected() {
         assertNull(Protocol.parse(byteArrayOf()))
         assertNull(Protocol.parse(Protocol.tap(0.5f, 0.5f).copyOf(4)))
-        assertNull(Protocol.parse(Protocol.swipe(0f, 0f, 1f, 1f, 300).copyOf(10)))
+        val twoPts = listOf(Protocol.Point(0f, 0f), Protocol.Point(1f, 1f))
+        assertNull(Protocol.parse(Protocol.gesturePath(twoPts, 300).copyOf(10)))
         assertNull(Protocol.parse(byteArrayOf(4, 0)))            // request with a payload
         assertNull(Protocol.parse(byteArrayOf(6, 99)))           // unknown control state
         assertNull(Protocol.parse(byteArrayOf(10, 99)))          // unknown nav action
+        assertNull(Protocol.parse(byteArrayOf(12, 99)))          // unknown connection quality
         assertNull(Protocol.parse(byteArrayOf(120)))             // unknown type
-        val zeroDuration = Protocol.swipe(0f, 0f, 1f, 1f, 300).also { it[9] = 0; it[10] = 0 }
+        val bytes = Protocol.gesturePath(twoPts, 300)
+        val zeroDuration = bytes.also { it[it.size - 2] = 0; it[it.size - 1] = 0 }
         assertNull(Protocol.parse(zeroDuration))
     }
 
@@ -84,5 +111,12 @@ class ProtocolTest {
     @Test
     fun sharingStartedRoundTrips() {
         assertEquals(Message.SharingStarted, Protocol.parse(Protocol.sharingStarted()))
+    }
+
+    @Test
+    fun connectionQualityRoundTrips() {
+        for (q in ConnectionQuality.entries) {
+            assertEquals(Message.Connection(q), Protocol.parse(Protocol.connectionQuality(q)))
+        }
     }
 }

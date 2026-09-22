@@ -208,6 +208,32 @@ arrived, so the helper can show "connecting" rather than a screen that gives no 
 happening — improving what the wait *feels* like even where the wait itself has not been
 shortened further.
 
+### The bitrate adapts to the connection, and the helper can see how it is doing
+
+The target bitrate is not fixed. `BitrateAdapter` samples how many bytes of picture are queued on
+his phone but not yet actually sent (`RelayClient.backlogBytes`, via
+`NeedySession.outgoingBacklogBytes`) roughly every two seconds, and adjusts the encoder's live
+target the same way TCP congestion control does: a queue backing up drops the bitrate
+immediately, by a set fraction; a queue that has stayed empty for a few samples in a row raises it
+again, one small step at a time. `MediaCodec` accepts a bitrate change on a running encoder
+directly (`ScreenEncoder.setBitrate`), so this never needs to reconfigure or recreate the encoder,
+the virtual display, or the helper's decoder — only the target number changes, live. Deliberately
+does not touch resolution or frame rate: those would need exactly that heavier reconstruction, for
+a smaller and less certain gain than simply asking for fewer (or more) bits per frame from the
+picture already flowing. Bounded between 400 kbps and 2.5 Mbps; verified on an emulator (imperfect
+but real evidence, since it involves genuine encode, transmit and decode, not a simulated number):
+a real burst of frames at the start of a session backed the queue up, dropped the bitrate, and
+reported it — visibly, live, on the helper's own screen (see below) — before climbing back to the
+ceiling on its own once the queue had stayed empty for a few seconds.
+
+The same signal drives a small, quiet **connection-quality indicator** next to the status line on
+the helper's screen only — a colored dot and a word (Good, Fair, Poor), not a number or a graph.
+Deliberately not shown to him: he already cannot see technical detail comfortably, and a raw
+quality readout would be one more confusing thing on a screen kept as simple as possible on
+purpose. The helper is the technical user here, and the one who can actually act on knowing the
+link is struggling (wait, or suggest moving closer to the router) rather than assume the app itself
+is broken.
+
 ## Known limitation: the ring can look briefly stale in the picture itself
 
 The Stop button, banner and pointer ring are real content drawn on his screen, so they are part of
@@ -268,7 +294,14 @@ architecture, so it is recorded here as expected rather than confirmed.
   the switch is on, or after two minutes. Android's own red screen-sharing timer stays throughout.
 - Force-stopping the app (Settings > Apps > Force stop) makes Android switch its accessibility
   service off, so he would have to turn it on again.
-- Long swipes and fast flicks are approximated: the path is a straight line over the time you took.
+- A drag still cannot pick something up and hold it before moving — real drag-and-drop reordering
+  (long-press an item, then move it without lifting) needs a single continuous gesture from press
+  to release, and the protocol only has a discrete long-press and a discrete drag, not a way to
+  chain the two into one unbroken touch. What the drag *does* carry now is the whole path a finger
+  actually took, not just where it started and ended (see `GESTURE_PATH` in `Protocol.kt`), which
+  is what ordinary swipes, scrolls and slider drags rely on — that part is fixed, verified by
+  dragging on the mirrored picture and watching a long settings list actually scroll through it,
+  not just jump.
 
 ## What this app must not become
 

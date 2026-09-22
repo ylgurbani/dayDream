@@ -23,6 +23,13 @@ actual latency on a real phone over a real connection has not been measured; wha
 verified on two emulators is that the picture, pointer ring, and remote tap and swipe are all
 correct through it.
 
+The bitrate adapts live to how the connection is actually coping (lower under real congestion,
+higher once it clears), and the helper sees a small Good/Fair/Poor indicator built from the same
+signal — not shown to him, deliberately, to keep his own screen simple. A drag now carries the
+whole path a finger took, not just a straight line between where it started and ended, which is
+what real swipes and scrolls actually need (dragging to reorder still needs a continuous
+press-then-move gesture the protocol does not support yet — see docs/SECURITY.md).
+
 **Not built yet:** the floating HOME button (Back/Home from the helper cover most of it), Hindi/Gujarati
 text, push notifications when he taps Get Help, and rotation while sharing.
 
@@ -38,7 +45,7 @@ docs/          security and design notes
 
 ```bash
 export JAVA_HOME=/opt/homebrew/opt/openjdk@23/libexec/openjdk.jdk/Contents/Home
-./gradlew assembleDebug testDebugUnitTest      # app + 40 unit tests
+./gradlew assembleDebug testDebugUnitTest      # app + 52 unit tests
 cd relay-server && npm install && npm test     # 10 relay tests
 ```
 
