@@ -3,6 +3,7 @@ package com.yattubhaa.app.session
 import com.yattubhaa.app.net.ControlState
 import com.yattubhaa.app.net.Protocol
 import com.yattubhaa.app.net.Role
+import com.yattubhaa.app.net.TouchPhase
 import com.yattubhaa.app.net.VideoCodec
 import com.yattubhaa.app.pairing.PairingStore
 import com.yattubhaa.app.service.RemoteInput
@@ -19,6 +20,10 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.security.SecureRandom
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 
 enum class NeedyPhase { Connecting, Waiting, Secured, Ended }
 
@@ -65,6 +70,22 @@ class NeedySession private constructor(pairing: PairingStore.Record, code: Strin
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var wrongTries = 0
+
+    /**
+     * Taps, drags and navigation from the helper are carried out here, one at a time and in
+     * order — not on the connection's own thread, where they used to run. Carrying one out means
+     * asking Android which apps are on screen, which waits on those apps; done on the connection's
+     * thread, that wait also held up every video frame going to the helper (sending and receiving
+     * share one lock), which is how a slow step mid-drag could freeze the picture on both phones.
+     */
+    private val input = Executors.newSingleThreadExecutor { r -> Thread(r, "yattu-input") }
+    /** The newest drag step not yet carried out. Only the newest matters: if steps have piled
+     *  up behind something slow, the finger goes straight to where the helper's finger is now
+     *  instead of replaying the backlog. */
+    private val pendingMove = AtomicReference<Protocol.Message.Touch?>(null)
+    private val inputSteps = AtomicInteger()
+    private val inputFailed = AtomicInteger()
+    private val slowestInputMs = AtomicLong()
 
     init {
         // The number is only good for a while, so an old one left on screen cannot be reused later.
@@ -125,8 +146,9 @@ class NeedySession private constructor(pairing: PairingStore.Record, code: Strin
                     _state.value = _state.value.copy(controlState = ControlState.Asked)
             }
             is Protocol.Message.ControlRelease -> setControl(ControlState.Off, tellPeer = false)
+            is Protocol.Message.Touch -> if (message.phase == TouchPhase.Move) queueMove(message) else queueGesture(message)
             is Protocol.Message.Tap, is Protocol.Message.LongPress, is Protocol.Message.GesturePath,
-            is Protocol.Message.Nav, is Protocol.Message.Touch -> applyGesture(message)
+            is Protocol.Message.Nav -> queueGesture(message)
             is Protocol.Message.ReceiverReport, Protocol.Message.KeyframeRequest -> videoFeedback?.invoke(message)
             is Protocol.Message.Decoders -> {
                 helperDecoders = message.codecs + VideoCodec.Avc
@@ -154,10 +176,28 @@ class NeedySession private constructor(pairing: PairingStore.Record, code: Strin
     private fun setControl(state: ControlState, tellPeer: Boolean) {
         if (_state.value.controlState == state) return
         _state.value = _state.value.copy(controlState = state)
-        // A finger the helper was holding down on this screen must never outlive their control.
-        if (state != ControlState.On) RemoteInput.cancelTouch()
+        // A finger the helper was holding down on this screen must never outlive their control:
+        // lifted now, and again after anything already waiting on the input thread.
+        if (state != ControlState.On) {
+            RemoteInput.cancelTouch()
+            runCatching { input.execute { RemoteInput.cancelTouch() } }
+        }
         if (tellPeer) send(Protocol.controlStatus(state))
     }
+
+    private fun queueGesture(message: Protocol.Message) {
+        runCatching { input.execute { applyGesture(message) } } // refused only once the session has ended
+    }
+
+    private fun queueMove(move: Protocol.Message.Touch) {
+        if (pendingMove.getAndSet(move) != null) return // a step already waiting will take this one instead
+        runCatching { input.execute { pendingMove.getAndSet(null)?.let { applyGesture(it) } } }
+    }
+
+    /** Steps carried out and steps that failed since the session began, and the slowest single
+     *  step since the last call — shown in the helper's stats overlay. */
+    fun takeInputStats(): Triple<Int, Int, Int> =
+        Triple(inputSteps.get(), inputFailed.get(), slowestInputMs.getAndSet(0).toInt())
 
     /**
      * Applies one tap, swipe or nav message, and keeps this phone's own [controlState] (which
@@ -177,7 +217,12 @@ class NeedySession private constructor(pairing: PairingStore.Record, code: Strin
     private fun applyGesture(message: Protocol.Message) {
         val cs = _state.value.controlState
         if (cs == ControlState.Off || cs == ControlState.Asked) return
-        when (RemoteInput.apply(message)) {
+        val started = System.nanoTime()
+        val result = RemoteInput.apply(message)
+        slowestInputMs.accumulateAndGet((System.nanoTime() - started) / 1_000_000, ::maxOf)
+        inputSteps.incrementAndGet()
+        if (result != RemoteInput.Result.Done) inputFailed.incrementAndGet()
+        when (result) {
             RemoteInput.Result.Blocked -> setControl(ControlState.Blocked, tellPeer = true)
             RemoteInput.Result.Done -> setControl(ControlState.On, tellPeer = true)
             RemoteInput.Result.Unavailable ->
@@ -206,6 +251,7 @@ class NeedySession private constructor(pairing: PairingStore.Record, code: Strin
         RemoteInput.cancelTouch()
         videoFeedback = null
         onReconnected = null
+        input.shutdown()
         scope.cancel()
     }
 

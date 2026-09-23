@@ -141,6 +141,7 @@ abstract class BaseSession(
         if (notifyPeer) channel.sendData(Protocol.stop())
         onEnded(reason)
         relay.close()
+        SessionHub.changed()
     }
 
     private companion object {

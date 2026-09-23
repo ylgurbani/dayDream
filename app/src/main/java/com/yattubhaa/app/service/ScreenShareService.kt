@@ -391,6 +391,7 @@ class ScreenShareService : Service() {
 
     private fun sendStats(session: NeedySession) {
         val c = controller ?: return
+        val (steps, failed, slowest) = session.takeInputStats()
         session.sendStats(
             Protocol.Message.SenderStats(
                 quality = c.quality,
@@ -399,6 +400,10 @@ class ScreenShareService : Service() {
                 rttMs = sendTracker.rttMs ?: 0,
                 droppedFrames = droppedFrames,
                 encoderSetup = encoder?.setupLevel ?: 0,
+                inputSteps = steps,
+                inputFailed = failed,
+                inputSlowestMs = slowest,
+                inputCancelled = RemoteInput.cancelledSteps,
             ),
         )
     }

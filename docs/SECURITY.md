@@ -74,13 +74,27 @@ not by reasoning about it in the abstract:
   already worked. Verified with a screenshot taken a fixed short time after swiping the app away
   from Recents (not a polling loop, which this exercise found could not be trusted for measuring
   anything on this timescale): the helper's screen showed "Finished" within about two seconds.
+- **Either app leaving the screen for more than a few seconds** dropped the session, on newer
+  Android versions. Reported from a real test: the moment he came back from Android's "Display
+  over other apps" screen (which comes before sharing starts), the connection was gone.
+  Reproduced on an emulator, where Android logged "Destroyed live tcp sockets" for this app five
+  seconds after it left the screen — not a crash, and not the app being killed (its process was
+  untouched): newer Android cuts the network off from an app that is in the background without a
+  foreground service, and closes its open connections. His phone only had a foreground service
+  while sharing; the helper's never did, so switching to a WhatsApp call mid-session for more than
+  a few seconds would have ended it too. Fixed with `SessionService`, a foreground service that
+  runs for exactly as long as a session is open on either phone, with a notification saying so
+  ("Help session with ... is open.") and a Stop button; on his phone it steps aside once sharing
+  starts, since the sharing service's own notification then takes over. Verified: twelve
+  seconds lingering on the overlay setting, and the helper's app away on the home screen for
+  twenty, both with the session intact and no connection destroyed.
 
 ## What each capability needs from Android
 
 | Piece | Standing state on his phone | Ends when |
 |-------|-----------------------------|-----------|
 | Idle app | Installed; a paired-helper record; "display over other apps" allowed once | Never (a setting) |
-| Get Help / connected | A relay connection while the screen is open | Session ends |
+| Get Help / connected | A relay connection, and a foreground service with a "Help session ... is open" notification so the connection survives the app leaving the screen | Session ends |
 | Screen sharing | Foreground service + capture, granted per session by Android's dialog | Session ends or Stop |
 | Pointer ring | Overlay window during a session only | Session ends |
 | Remote tap/swipe (built, opt-in) | An Accessibility Service, offered after his first Yes and switched on by him in Settings once. Stays on until he taps **Turn off remote control** on his home screen. | He taps Turn off |
@@ -132,6 +146,16 @@ Settings.
   ending, a secure app), and on its own if the helper's connection goes quiet for five seconds
   mid-drag — a finger is never left pressed on his screen. Lifting is always allowed, like Back
   and Home: it can only let go. See `RemoteInputAccessibilityService.touch`.
+  The banking-app check itself asks every app on screen for its window, which means waiting on
+  each app in turn, and for a drag it used to run on every step, many times a second, on the
+  connection's own thread — where a slow answer also held up every video frame going to the
+  helper. A real test saw drags freeze part-way on both phones until the next tap; that could not
+  be reproduced on an emulator (whose launcher answers in a few milliseconds), but this is the
+  likeliest cause, so: taps and drags now run on their own thread; a drag is checked when it is
+  pressed, again whenever Android reports a different window coming to the front, and at least
+  every 0.75 seconds; and if drag steps pile up behind anything, the finger goes straight to the
+  newest position rather than replaying the backlog. The helper's stats overlay now shows how many
+  steps were carried out, how many failed or were cut short by Android, and the slowest step.
 - The service does not read what is on the screen. It declares the ability to see windows only so it
   can read those package names. Android's own "full control" warning uses generic wording that
   sounds broader than that.
@@ -319,6 +343,10 @@ that mattered on a slow link.
   emulators** (see "How this was tested" above). Real phones, a real mobile network, and hardware
   H.265 are all still to be tried. The helper's stats overlay is there so that test can say what
   actually happened.
+- **The drag freeze from the Bhutan test was not reproduced on emulators** — every drag there
+  worked — so the changes above are aimed at the likeliest cause, not a confirmed one. The
+  helper's stats overlay ("input: ... steps · failed · cut short · slowest") is there to show what
+  actually happens on the next real test.
 - **Press, hold and drag, rotation, and the new Allow/Settings logic were tested on emulators
   only**: an app icon was picked up and moved on his home screen from the helper's picture, a hold
   without moving opened the icon's menu (a long-press), taps landed correctly in landscape, and

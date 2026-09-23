@@ -133,7 +133,10 @@ class ProtocolTest {
             assertEquals(Message.Decoders(set), Protocol.parse(Protocol.decoders(set)))
         }
         for (q in ConnectionQuality.entries) {
-            val s = Message.SenderStats(q, bitrateKbps = 1600, tier = 2, rttMs = 380, droppedFrames = 12, encoderSetup = 1)
+            val s = Message.SenderStats(
+                q, bitrateKbps = 1600, tier = 2, rttMs = 380, droppedFrames = 12, encoderSetup = 1,
+                inputSteps = 900, inputFailed = 3, inputSlowestMs = 240, inputCancelled = 1,
+            )
             assertEquals(s, Protocol.parse(Protocol.senderStats(s)))
         }
     }

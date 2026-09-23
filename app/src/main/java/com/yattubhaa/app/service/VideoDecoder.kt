@@ -46,6 +46,9 @@ class VideoDecoder(private val handler: Handler, private val onNeedKeyframe: () 
     private var needsKeyframe = true
     private var lastRequestAt: Long? = null
     private var shownSinceStart = false
+    /** When the codec last took a frame (or was created): a long queue is only a stall if this
+     *  is old, not when a large held backlog has just been handed to it all at once. */
+    private var lastFedAt = 0L
 
     /** For the helper's stats overlay only; read from other threads, so only ever approximate. */
     @Volatile var keyframeRequests = 0
@@ -94,7 +97,7 @@ class VideoDecoder(private val handler: Handler, private val onNeedKeyframe: () 
                 return@post
             }
             pending.addLast(data)
-            if (pending.size > MAX_PENDING) {
+            if (pending.size > MAX_PENDING && SystemClock.elapsedRealtime() - lastFedAt > STALL_MS) {
                 // The codec has stopped taking input; start over from a fresh keyframe.
                 Log.w(TAG, "decoder stopped accepting input; restarting")
                 restartCodec()
@@ -146,6 +149,7 @@ class VideoDecoder(private val handler: Handler, private val onNeedKeyframe: () 
         codec = createCodec(type, s)
         if (codec == null) return
         shownSinceStart = false
+        lastFedAt = SystemClock.elapsedRealtime()
         if (held.isNotEmpty()) {
             // Everything since the latest keyframe, kept while there was nowhere to show it.
             pending.addAll(held)
@@ -225,6 +229,7 @@ class VideoDecoder(private val handler: Handler, private val onNeedKeyframe: () 
                 buffer.put(chunk)
                 c.queueInputBuffer(index, 0, chunk.size, nextPts, 0)
                 nextPts += FRAME_PTS_STEP_US
+                lastFedAt = SystemClock.elapsedRealtime()
                 true
             }.getOrDefault(false)
             if (!ok) {
@@ -254,6 +259,7 @@ class VideoDecoder(private val handler: Handler, private val onNeedKeyframe: () 
         const val FRAME_PTS_STEP_US = 50_000L // only needs to keep increasing
         const val REQUEST_INTERVAL_MS = 1000L
         const val MAX_PENDING = 60
+        const val STALL_MS = 1000L
         // Ten seconds between the sender's periodic keyframes at up to 20 frames a second.
         const val MAX_HELD_FRAMES = 240
         const val MAX_HELD_BYTES = 6 * 1024 * 1024

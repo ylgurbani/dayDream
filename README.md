@@ -32,8 +32,12 @@ nothing of this, deliberately, to keep his own screen simple. In control mode, t
 swipe, press and hold (a long-press), and press, hold and drag to move something, such as
 reordering a list or moving an icon. Turning his phone sideways while sharing works.
 
-**Both phones must run the same version**: the video messages changed, and an older phone will
-connect but show no picture.
+While a session is open, both phones show a "Help session ... is open" notification with a Stop
+button: newer Android versions cut the network off from apps that leave the screen without one,
+which used to drop the session when he visited a settings screen or you switched apps.
+
+**Both phones must run the same version**: the messages between them changed, and an older phone
+will connect but not work properly.
 
 **Not built yet:** the floating HOME button (Back/Home from the helper cover most of it), Hindi/Gujarati
 text, and push notifications when he taps Get Help.
@@ -50,7 +54,7 @@ docs/          security and design notes
 
 ```bash
 export JAVA_HOME=/opt/homebrew/opt/openjdk@23/libexec/openjdk.jdk/Contents/Home
-./gradlew assembleDebug testDebugUnitTest      # app + 82 unit tests
+./gradlew assembleDebug testDebugUnitTest      # app + 85 unit tests
 cd relay-server && npm install && npm test     # 12 relay tests
 ```
 

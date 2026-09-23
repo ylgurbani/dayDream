@@ -12,6 +12,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <!-- Tier 2: mirroring the screen live during a session is granted per-session via the
          system's own MediaProjection consent dialog, not a manifest permission. -->
@@ -64,6 +65,20 @@
             android:name=".service.ScreenShareService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
+
+        <!-- Keeps a help session's connection open while the app is off screen, for exactly as
+             long as the session lasts, with a notification and a Stop button. Newer Android
+             versions cut the network off from a background app with no foreground service after
+             about five seconds (see SessionService). Neither the connectedDevice, dataSync nor
+             remoteMessaging types describe a live help session, so this is "specialUse". -->
+        <service
+            android:name=".session.SessionService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps a user-started remote help session's encrypted connection to a paired family member open while the user briefly switches apps (for example to Android settings or a phone call). Runs only while that session is open and ends with it; the notification has a Stop button." />
+        </service>
 
         <!-- Tier 3 only. See the note above the permission comment block. -->
         <service

@@ -15,7 +15,8 @@ private val SWIPE_PATH = listOf(Protocol.Point(0.5f, 0.8f), Protocol.Point(0.5f,
 
 private class FakeTarget(var visible: List<String>? = listOf("com.android.chrome")) : RemoteInputTarget {
     val log = mutableListOf<String>()
-    override fun visiblePackages(): List<String>? = visible
+    var checks = 0
+    override fun visiblePackages(): List<String>? { checks++; return visible }
     var succeed = true
     override fun tap(x: Float, y: Float, longPress: Boolean): Boolean { log += if (longPress) "long" else "tap"; return succeed }
     override fun gesturePath(points: List<Protocol.Point>, durationMs: Int): Boolean { log += "swipe"; return succeed }
@@ -111,12 +112,41 @@ class RemoteInputTest {
     }
 
     @Test
-    fun aHeldDragIsLetGoTheMomentABankAppIsOnScreenButLiftingIsAlwaysAllowed() {
+    fun aHeldDragIsLetGoTheMomentABankAppComesToTheFrontButLiftingIsAlwaysAllowed() {
         RemoteInput.attach(target)
-        RemoteInput.apply(Message.Touch(TouchPhase.Down, 0.5f, 0.5f))
+        RemoteInput.apply(Message.Touch(TouchPhase.Down, 0.5f, 0.5f), nowMs = 0)
         target.visible = listOf("com.snapwork.hdfc")
-        assertEquals(Result.Blocked, RemoteInput.apply(Message.Touch(TouchPhase.Move, 0.5f, 0.6f)))
-        assertEquals(Result.Done, RemoteInput.apply(Message.Touch(TouchPhase.Up, 0.5f, 0.6f)))
+        RemoteInput.onWindowsChanged() // what Android reports as the bank app comes to the front
+        assertEquals(Result.Blocked, RemoteInput.apply(Message.Touch(TouchPhase.Move, 0.5f, 0.6f), nowMs = 40))
+        assertEquals(Result.Done, RemoteInput.apply(Message.Touch(TouchPhase.Up, 0.5f, 0.6f), nowMs = 80))
         assertEquals(listOf("touch:Down", "cancel", "touch:Up"), target.log)
+    }
+
+    @Test
+    fun aHeldDragIsCheckedWhenPressedThenOnlyEveryFewHundredMillisecondsNotEveryStep() {
+        RemoteInput.attach(target)
+        RemoteInput.apply(Message.Touch(TouchPhase.Down, 0.5f, 0.5f), nowMs = 0)
+        assertEquals(1, target.checks)
+        for (t in 40L..700L step 40) RemoteInput.apply(Message.Touch(TouchPhase.Move, 0.5f, 0.5f), nowMs = t)
+        assertEquals("seventeen steps, no extra checks", 1, target.checks)
+        RemoteInput.apply(Message.Touch(TouchPhase.Move, 0.5f, 0.5f), nowMs = RemoteInput.MOVE_RECHECK_MS)
+        assertEquals(2, target.checks)
+    }
+
+    @Test
+    fun evenWithoutAWindowChangeABankAppIsCaughtWithinTheRecheckInterval() {
+        RemoteInput.attach(target)
+        RemoteInput.apply(Message.Touch(TouchPhase.Down, 0.5f, 0.5f), nowMs = 0)
+        target.visible = listOf("net.one97.paytm")
+        assertEquals(Result.Done, RemoteInput.apply(Message.Touch(TouchPhase.Move, 0.5f, 0.6f), nowMs = 100))
+        assertEquals(Result.Blocked, RemoteInput.apply(Message.Touch(TouchPhase.Move, 0.5f, 0.7f), nowMs = 800))
+        assertTrue("cut short, not left pressed", "cancel" in target.log)
+    }
+
+    @Test
+    fun tapsAreStillCheckedEveryTime() {
+        RemoteInput.attach(target)
+        repeat(3) { RemoteInput.apply(Message.Tap(0.5f, 0.5f), nowMs = it.toLong()) }
+        assertEquals(3, target.checks)
     }
 }

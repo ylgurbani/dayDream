@@ -49,7 +49,9 @@ enum class TouchPhase(val wire: Byte) { Down(0), Move(1), Up(2) }
  *   KEYFRAME_REQUEST helper -> needy the helper cannot decode what comes next without a keyframe
  *   DECODERS       helper -> needy   bitmask of [VideoCodec]s it can decode in hardware
  *   SENDER_STATS   needy -> helper   quality (1) | target kbps (2) | quality tier (1) | round trip
- *                                    ms (2) | frames held back (2) | encoder setup (1), every 2s
+ *                                    ms (2) | frames dropped (2) | encoder setup (1) | input steps
+ *                                    (2) | input steps failed (2) | slowest input step ms (2) |
+ *                                    drag steps cut short (2), every 2s
  *   SHARING_STARTED needy -> helper  sharing has begun; the picture is on its way but has not
  *                                    necessarily arrived yet, so the helper has something to show
  *                                    other than silence while it does
@@ -91,6 +93,7 @@ object Protocol {
     private const val TOUCH: Byte = 17
     private const val SENDER_STATS: Byte = 18
     private const val VIDEO_HEADER = 1 + 1 + 2 + 2 + 4 + 4
+    private const val SENDER_STATS_LEN = 19
     private const val U16_MAX = 0xFFFF
     private const val SCALE = 10000
     private const val CLEAR = 0xFFFF
@@ -132,6 +135,10 @@ object Protocol {
             val rttMs: Int,
             val droppedFrames: Int,
             val encoderSetup: Int,
+            val inputSteps: Int = 0,
+            val inputFailed: Int = 0,
+            val inputSlowestMs: Int = 0,
+            val inputCancelled: Int = 0,
         ) : Message
         /** Sharing has begun; the picture itself may still be a moment away. */
         data object SharingStarted : Message
@@ -175,10 +182,12 @@ object Protocol {
     fun decoders(codecs: Set<VideoCodec>): ByteArray =
         byteArrayOf(DECODERS, codecs.fold(0) { acc, c -> acc or c.bit }.toByte())
 
-    fun senderStats(s: Message.SenderStats): ByteArray = ByteBuffer.allocate(11)
+    fun senderStats(s: Message.SenderStats): ByteArray = ByteBuffer.allocate(SENDER_STATS_LEN)
         .put(SENDER_STATS).put(s.quality.wire)
         .putShort(u16(s.bitrateKbps)).put(s.tier.coerceIn(0, 127).toByte())
         .putShort(u16(s.rttMs)).putShort(u16(s.droppedFrames)).put(s.encoderSetup.coerceIn(0, 127).toByte())
+        .putShort(u16(s.inputSteps)).putShort(u16(s.inputFailed))
+        .putShort(u16(s.inputSlowestMs)).putShort(u16(s.inputCancelled))
         .array()
 
     fun sharingStarted(): ByteArray = byteArrayOf(SHARING_STARTED)
@@ -264,9 +273,9 @@ object Protocol {
                 Message.Decoders(VideoCodec.entries.filter { bytes[1].toInt() and it.bit != 0 }.toSet())
             }
             SENDER_STATS -> {
-                if (bytes.size != 11) return null
+                if (bytes.size != SENDER_STATS_LEN) return null
                 val quality = ConnectionQuality.entries.firstOrNull { it.wire == bytes[1] } ?: return null
-                val buf = ByteBuffer.wrap(bytes, 2, 9)
+                val buf = ByteBuffer.wrap(bytes, 2, SENDER_STATS_LEN - 2)
                 Message.SenderStats(
                     quality = quality,
                     bitrateKbps = buf.short.toInt() and 0xFFFF,
@@ -274,6 +283,10 @@ object Protocol {
                     rttMs = buf.short.toInt() and 0xFFFF,
                     droppedFrames = buf.short.toInt() and 0xFFFF,
                     encoderSetup = buf.get().toInt(),
+                    inputSteps = buf.short.toInt() and 0xFFFF,
+                    inputFailed = buf.short.toInt() and 0xFFFF,
+                    inputSlowestMs = buf.short.toInt() and 0xFFFF,
+                    inputCancelled = buf.short.toInt() and 0xFFFF,
                 )
             }
             SHARING_STARTED -> if (bytes.size == 1) Message.SharingStarted else null

@@ -6,6 +6,7 @@ import com.yattubhaa.app.net.TouchPhase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import java.util.concurrent.atomic.AtomicInteger
 
 /** What the accessibility service can do on this phone. Kept as an interface so the rules below can be tested. */
 interface RemoteInputTarget {
@@ -42,7 +43,27 @@ object RemoteInput {
 
     val isAvailable: Boolean get() = target != null
 
+    // When the banking-app check last ran, and whether the app on screen may have changed since.
+    @Volatile private var checkedAt: Long? = null
+    @Volatile private var windowsChanged = true
+    private val cancelled = AtomicInteger()
+
+    /** Steps of a held drag that Android refused or cut short, since the app started. */
+    val cancelledSteps: Int get() = cancelled.get()
+
+    /** Android says a different window came to the front: check again before the next step. */
+    fun onWindowsChanged() {
+        windowsChanged = true
+    }
+
+    /** A step of a held drag was refused or cut short by Android. For the helper's stats. */
+    fun onStepCancelled() {
+        cancelled.incrementAndGet()
+    }
+
     fun attach(t: RemoteInputTarget) {
+        checkedAt = null
+        windowsChanged = true
         target = t
         _connected.value = true
     }
@@ -57,8 +78,14 @@ object RemoteInput {
     /**
      * Applies one message, unless a banking or payment app is on screen (or we cannot tell). Going back, home or to
      * recents is always allowed, because that is how someone gets out of such an app.
+     *
+     * The check asks every app on screen for its window, which means waiting on each app in
+     * turn; for a held drag, arriving many times a second, doing that on every step made each
+     * step wait on the launcher mid-animation. So a held drag is checked when it is pressed, and
+     * then again whenever Android reports a different window coming to the front, or every
+     * [MOVE_RECHECK_MS] regardless — never trusting a drag to stay out of a bank app for long.
      */
-    fun apply(message: Protocol.Message): Result {
+    fun apply(message: Protocol.Message, nowMs: Long = System.nanoTime() / 1_000_000): Result {
         val t = target ?: return Result.Unavailable
         if (message is Protocol.Message.Nav) {
             return if (t.navigate(message.action)) Result.Done else Result.Failed
@@ -67,12 +94,18 @@ object RemoteInput {
         if (message is Protocol.Message.Touch && message.phase == TouchPhase.Up) {
             return if (t.touch(TouchPhase.Up, message.x, message.y)) Result.Done else Result.Failed
         }
-        // If we cannot tell which apps are open, refuse rather than guess. Checked on every step
-        // of a held drag too, not just when it starts: a drag must not carry on into a bank app.
-        val visible = t.visiblePackages()
-        if (visible == null || visible.any(SecureAppPolicy::isBlocked)) {
-            if (message is Protocol.Message.Touch) t.cancelTouch()
-            return Result.Blocked
+        // If we cannot tell which apps are open, refuse rather than guess.
+        val dragStep = message is Protocol.Message.Touch && message.phase == TouchPhase.Move
+        val due = !dragStep || windowsChanged || checkedAt.let { it == null || nowMs - it >= MOVE_RECHECK_MS }
+        if (due) {
+            windowsChanged = false
+            checkedAt = nowMs
+            val visible = t.visiblePackages()
+            if (visible == null || visible.any(SecureAppPolicy::isBlocked)) {
+                if (message is Protocol.Message.Touch) t.cancelTouch()
+                checkedAt = null // the next step checks again rather than ride on this one
+                return Result.Blocked
+            }
         }
         val ok = when (message) {
             is Protocol.Message.Tap -> t.tap(message.x, message.y, longPress = false)
@@ -88,4 +121,6 @@ object RemoteInput {
     fun cancelTouch() {
         target?.cancelTouch()
     }
+
+    const val MOVE_RECHECK_MS = 750L
 }

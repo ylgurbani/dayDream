@@ -43,6 +43,7 @@ class RemoteInputAccessibilityService : AccessibilityService(), RemoteInputTarge
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event?.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
+        RemoteInput.onWindowsChanged()
         val pkg = event.packageName?.toString()
         if (SecureAppPolicy.countsAsForeground(pkg, packageName)) lastForeground = pkg
     }
@@ -137,7 +138,10 @@ class RemoteInputAccessibilityService : AccessibilityService(), RemoteInputTarge
                 // A real touch on his screen, or Android refusing the continuation: either way the
                 // helper's finger is no longer down, and later moves must not pretend it is.
                 synchronized(this@RemoteInputAccessibilityService) {
-                    if (heldStroke === stroke) heldStroke = null
+                    if (heldStroke === stroke) {
+                        heldStroke = null
+                        RemoteInput.onStepCancelled()
+                    }
                 }
             }
         }, main)
