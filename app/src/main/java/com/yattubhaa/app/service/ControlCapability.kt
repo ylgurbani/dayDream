@@ -29,6 +29,20 @@ object ControlCapability {
         )
     }
 
+    /**
+     * Whether he has actually switched Yattu Bhaa on in Android's accessibility settings — read
+     * from Android's own record, not guessed. Different from [RemoteInput.isAvailable], which
+     * also needs Android to have finished (re)connecting the service: on an older phone that can
+     * take several seconds, and an earlier version sent him back to Settings during that wait,
+     * for a switch that was already on.
+     */
+    fun isSwitchedOn(context: Context): Boolean {
+        val enabled = Settings.Secure.getString(context.contentResolver, Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES)
+            ?: return false
+        val mine = component(context)
+        return enabled.split(':').any { ComponentName.unflattenFromString(it) == mine }
+    }
+
     /** True from the moment he first says yes until he turns remote control off. */
     fun isOffered(context: Context): Boolean =
         context.packageManager.getComponentEnabledSetting(component(context)) == PackageManager.COMPONENT_ENABLED_STATE_ENABLED

@@ -2,6 +2,7 @@ package com.yattubhaa.app.service
 
 import com.yattubhaa.app.net.NavAction
 import com.yattubhaa.app.net.Protocol
+import com.yattubhaa.app.net.TouchPhase
 import com.yattubhaa.app.net.Protocol.Message
 import com.yattubhaa.app.service.RemoteInput.Result
 import org.junit.After
@@ -18,6 +19,8 @@ private class FakeTarget(var visible: List<String>? = listOf("com.android.chrome
     var succeed = true
     override fun tap(x: Float, y: Float, longPress: Boolean): Boolean { log += if (longPress) "long" else "tap"; return succeed }
     override fun gesturePath(points: List<Protocol.Point>, durationMs: Int): Boolean { log += "swipe"; return succeed }
+    override fun touch(phase: TouchPhase, x: Float, y: Float): Boolean { log += "touch:$phase"; return succeed }
+    override fun cancelTouch() { log += "cancel" }
     override fun navigate(action: NavAction): Boolean { log += "nav:$action"; return succeed }
 }
 
@@ -98,5 +101,22 @@ class RemoteInputTest {
         RemoteInput.detach(target)
         assertTrue(RemoteInput.isAvailable)
         RemoteInput.detach(newer)
+    }
+
+    @Test
+    fun aHeldDragIsPassedThroughStepByStep() {
+        RemoteInput.attach(target)
+        for (phase in TouchPhase.entries) assertEquals(Result.Done, RemoteInput.apply(Message.Touch(phase, 0.5f, 0.5f)))
+        assertEquals(listOf("touch:Down", "touch:Move", "touch:Up"), target.log)
+    }
+
+    @Test
+    fun aHeldDragIsLetGoTheMomentABankAppIsOnScreenButLiftingIsAlwaysAllowed() {
+        RemoteInput.attach(target)
+        RemoteInput.apply(Message.Touch(TouchPhase.Down, 0.5f, 0.5f))
+        target.visible = listOf("com.snapwork.hdfc")
+        assertEquals(Result.Blocked, RemoteInput.apply(Message.Touch(TouchPhase.Move, 0.5f, 0.6f)))
+        assertEquals(Result.Done, RemoteInput.apply(Message.Touch(TouchPhase.Up, 0.5f, 0.6f)))
+        assertEquals(listOf("touch:Down", "cancel", "touch:Up"), target.log)
     }
 }

@@ -2,6 +2,7 @@ package com.yattubhaa.app.service
 
 import com.yattubhaa.app.net.NavAction
 import com.yattubhaa.app.net.Protocol
+import com.yattubhaa.app.net.TouchPhase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,6 +20,11 @@ interface RemoteInputTarget {
     /** [points] is the whole path a dragged finger took, not just where it started and ended —
      *  at least two points, fractions of the screen. */
     fun gesturePath(points: List<Protocol.Point>, durationMs: Int): Boolean
+    /** One step of a finger pressed, held and moved live (see [Protocol.touch]): Down presses and
+     *  holds long enough to count as a long-press, Move drags it, Up lifts it. */
+    fun touch(phase: TouchPhase, x: Float, y: Float): Boolean
+    /** Lifts a finger held down by [touch], if there is one. Safe to call at any time. */
+    fun cancelTouch()
     fun navigate(action: NavAction): Boolean
 }
 
@@ -57,15 +63,29 @@ object RemoteInput {
         if (message is Protocol.Message.Nav) {
             return if (t.navigate(message.action)) Result.Done else Result.Failed
         }
-        // If we cannot tell which apps are open, refuse rather than guess.
-        val visible = t.visiblePackages() ?: return Result.Blocked
-        if (visible.any(SecureAppPolicy::isBlocked)) return Result.Blocked
+        // Lifting a held finger is always allowed, like going back or home: it can only let go.
+        if (message is Protocol.Message.Touch && message.phase == TouchPhase.Up) {
+            return if (t.touch(TouchPhase.Up, message.x, message.y)) Result.Done else Result.Failed
+        }
+        // If we cannot tell which apps are open, refuse rather than guess. Checked on every step
+        // of a held drag too, not just when it starts: a drag must not carry on into a bank app.
+        val visible = t.visiblePackages()
+        if (visible == null || visible.any(SecureAppPolicy::isBlocked)) {
+            if (message is Protocol.Message.Touch) t.cancelTouch()
+            return Result.Blocked
+        }
         val ok = when (message) {
             is Protocol.Message.Tap -> t.tap(message.x, message.y, longPress = false)
             is Protocol.Message.LongPress -> t.tap(message.x, message.y, longPress = true)
             is Protocol.Message.GesturePath -> t.gesturePath(message.points, message.durationMs)
+            is Protocol.Message.Touch -> t.touch(message.phase, message.x, message.y)
             else -> return Result.Failed
         }
         return if (ok) Result.Done else Result.Failed
+    }
+
+    /** Lifts any finger the helper is holding down on this screen. */
+    fun cancelTouch() {
+        target?.cancelTouch()
     }
 }

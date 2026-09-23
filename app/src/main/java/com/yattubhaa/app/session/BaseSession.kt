@@ -1,5 +1,6 @@
 package com.yattubhaa.app.session
 
+import android.util.Log
 import com.yattubhaa.app.net.Crypto
 import com.yattubhaa.app.net.Protocol
 import com.yattubhaa.app.net.RelayClient
@@ -135,6 +136,7 @@ abstract class BaseSession(
     fun end(reason: String, notifyPeer: Boolean = true) {
         if (ended) return
         ended = true
+        Log.i("YattuSession", "$role session ended: $reason")
         retryScope.cancel()
         if (notifyPeer) channel.sendData(Protocol.stop())
         onEnded(reason)

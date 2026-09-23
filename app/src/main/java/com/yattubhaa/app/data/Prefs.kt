@@ -37,17 +37,6 @@ object Prefs {
         get() = sp.getString("relay_url", null) ?: BuildConfig.DEFAULT_RELAY_URL
         set(v) = sp.edit().putString("relay_url", v).apply()
 
-    /**
-     * Whether Android's accessibility switch has been turned on since the last time remote
-     * control was turned off. True from the moment it first connects; reset to false only when
-     * "Turn off remote control" is tapped. Used to tell "he already did the Settings step" from
-     * "this is the first time, or he just turned it off" — the former should never be sent back
-     * to Settings again for a merely slow reconnect.
-     */
-    var accessibilityGrantedSinceLastOff: Boolean
-        get() = sp.getBoolean("a11y_granted_since_last_off", false)
-        set(v) = sp.edit().putBoolean("a11y_granted_since_last_off", v).apply()
-
     val hasHelperPin: Boolean get() = sp.contains("pin_hash")
 
     fun setHelperPin(pin: String) {

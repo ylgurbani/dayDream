@@ -47,7 +47,8 @@ Render builds the relay from its Dockerfile and gives you an `https://something.
 address with the safe road already handled. The free plan is enough for this (0.1 CPU, 512 MB),
 but it goes to sleep after 15 minutes of no traffic and takes maybe a minute to wake up on the
 next connection — fine for occasional help calls, less fine if he needs you urgently and the
-relay is asleep. Paid plans stay awake; check Render's current pricing.
+relay is asleep. Paid plans stay awake; check Render's current pricing. **Choose the Frankfurt
+region when you create it** — see "Where the relay runs matters" below; it cannot be changed later.
 
 Render deploys from a GitHub repository, so this project needs to be on GitHub first:
 
@@ -82,6 +83,32 @@ Render deploys from a GitHub repository, so this project needs to be on GitHub f
 5. In the app, use the relay address `wss://<the same name>.onrender.com`.
 6. In the service's Settings, set **Health Check Path** to `/healthz` — Render then restarts it
    automatically if it ever stops responding.
+
+### Where the relay runs matters: pick Frankfurt
+
+Every frame of his screen goes from his phone to the relay and from the relay to yours, so the
+relay should sit between the two of you, not off to one side. Render's `render.yaml` in this
+project does not name a region, which means **Oregon (US West Coast)** by default. For India and
+the UK that sends every frame across two oceans and back: very roughly 250ms from India to Oregon
+plus 140ms from Oregon to the UK, against roughly 140ms plus 20ms through **Frankfurt** — the
+closest of Render's regions to both of you. (Singapore is closer to him but much further from you.)
+That difference is added to every tap you make and every frame you see.
+
+**Check which region yours is in:** the Render dashboard shows it on the service's page.
+
+**Render cannot move an existing service to another region** — its docs are explicit that the
+region cannot be changed after creation. To move it:
+
+1. In the Render dashboard, **New +** → **Web Service** (the manual method above), and choose
+   **Frankfurt** as the region when creating it, with a new name (e.g. `yattu-bhaa-relay-eu`).
+2. Check `https://<new name>.onrender.com/healthz` says `ok`.
+3. Pair again on both phones with the new `wss://` address: the relay address is part of the
+   pairing link, so the old pairing keeps pointing at the old relay. (Helper mode > Set up a new
+   phone, then send him the new link.)
+4. Once the new pairing works, delete the old service.
+
+Do not simply add `region: frankfurt` to `render.yaml` while the old service exists: Render will
+not apply it to a service that already exists, and the Blueprint sync may fail over it.
 
 **Leave the instance count at 1.** The relay keeps who is connected in memory; a second instance
 would only know half of it, and two phones could land on different ones and never meet. The free

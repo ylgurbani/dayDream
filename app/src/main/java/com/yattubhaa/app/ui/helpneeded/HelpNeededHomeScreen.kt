@@ -32,7 +32,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
-import com.yattubhaa.app.data.Prefs
 import com.yattubhaa.app.service.ControlCapability
 import com.yattubhaa.app.ui.components.BigButton
 import com.yattubhaa.app.ui.components.ButtonKind
@@ -101,7 +100,6 @@ fun HelpNeededHomeScreen(onGetHelp: () -> Unit, onOpenHelperMode: () -> Unit) {
                 text = "Turn off remote control",
                 onClick = {
                     ControlCapability.setOffered(context, false)
-                    Prefs.accessibilityGrantedSinceLastOff = false
                     remoteControlOn = false
                 },
                 kind = ButtonKind.Secondary,

@@ -18,21 +18,41 @@ enum class ControlState(val wire: Byte) {
 enum class NavAction(val wire: Byte) { Back(1), Home(2), Recents(3), Notifications(4) }
 
 /** How well the connection is keeping up with the picture right now, as judged by the needy
- *  phone (it is the one that can see its own outgoing queue). Shown to the helper only — he is
+ *  phone from its own queue and the helper's receiver reports. Shown to the helper only — he is
  *  the technical user here, and a raw quality readout would just be one more confusing thing on
  *  a screen that is deliberately kept simple. */
 enum class ConnectionQuality(val wire: Byte) { Good(0), Fair(1), Poor(2) }
+
+/** The video formats this app can send. Plain MIME strings rather than `MediaFormat` constants so
+ *  this file stays free of Android classes and can be unit tested directly. */
+enum class VideoCodec(val bit: Int, val mime: String, val label: String) {
+    Avc(1, "video/avc", "H.264"),
+    Hevc(2, "video/hevc", "H.265"),
+}
+
+/** One step of a finger held down on the helper's screen and moved live (see [Protocol.touch]). */
+enum class TouchPhase(val wire: Byte) { Down(0), Move(1), Up(2) }
 
 /**
  * What the two phones say to each other once the secure channel is up. Each message is one
  * type byte followed by its payload; the whole thing is encrypted by [SecureChannel].
  * Positions are fractions of the screen sent as 0..10000.
  *
- *   VIDEO_CHUNK    needy -> helper   flags (1, bit0 = keyframe) | width (2) | height (2) | H.264
+ *   VIDEO_FRAME    needy -> helper   flags (1: bit0 keyframe, bit1 H.265) | width (2) | height (2)
+ *                                    | seq (4) | sentAt (4) | encoded frame. seq counts frames
+ *                                    actually handed to the connection, so a gap means one was lost
+ *                                    on the way; sentAt is the sender's own clock in ms, only ever
+ *                                    compared with itself (the two phones' clocks are unrelated)
+ *   RECEIVER_REPORT helper -> needy  highest seq (4) | its sentAt echoed (4) | ms held since it
+ *                                    arrived (2) | queueing delay ms (2) | frames lost (2): how the
+ *                                    picture is actually arriving, four times a second
+ *   KEYFRAME_REQUEST helper -> needy the helper cannot decode what comes next without a keyframe
+ *   DECODERS       helper -> needy   bitmask of [VideoCodec]s it can decode in hardware
+ *   SENDER_STATS   needy -> helper   quality (1) | target kbps (2) | quality tier (1) | round trip
+ *                                    ms (2) | frames held back (2) | encoder setup (1), every 2s
  *   SHARING_STARTED needy -> helper  sharing has begun; the picture is on its way but has not
  *                                    necessarily arrived yet, so the helper has something to show
  *                                    other than silence while it does
- *   CONNECTION_QUALITY needy -> helper  a [ConnectionQuality], sent only when it changes
  *   POINTER        helper -> needy   x (2) | y (2); 0xFFFF, 0xFFFF clears the ring
  *   STOP           either            ends the session
  *   CONTROL_REQUEST  helper -> needy  ask to tap and swipe for them (they must say yes)
@@ -43,12 +63,17 @@ enum class ConnectionQuality(val wire: Byte) { Good(0), Fair(1), Poor(2) }
  *                                     in ms (2) — the whole path the finger actually took, not
  *                                     just where it started and ended
  *   NAV              helper -> needy  back, home or recents
+ *   TOUCH            helper -> needy  phase (1) | x (2) | y (2): a finger pressed, held and moved
+ *                                     live, for press-hold-drag (reordering, drag and drop)
+ *
+ * Retired, and no longer understood by either side: 1 (the old VIDEO_CHUNK, which had no seq or
+ * timestamp) and 12 (CONNECTION_QUALITY, now part of SENDER_STATS). Both phones need the same
+ * version of the app.
  *
  * The helper can only ever ask. Whether control is on is decided on the other phone, which
  * ignores every control message unless it has said yes for this session.
  */
 object Protocol {
-    private const val VIDEO_CHUNK: Byte = 1
     private const val POINTER: Byte = 2
     private const val STOP: Byte = 3
     private const val CONTROL_REQUEST: Byte = 4
@@ -59,7 +84,14 @@ object Protocol {
     private const val GESTURE_PATH: Byte = 9
     private const val NAV: Byte = 10
     private const val SHARING_STARTED: Byte = 11
-    private const val CONNECTION_QUALITY: Byte = 12
+    private const val VIDEO_FRAME: Byte = 13
+    private const val RECEIVER_REPORT: Byte = 14
+    private const val KEYFRAME_REQUEST: Byte = 15
+    private const val DECODERS: Byte = 16
+    private const val TOUCH: Byte = 17
+    private const val SENDER_STATS: Byte = 18
+    private const val VIDEO_HEADER = 1 + 1 + 2 + 2 + 4 + 4
+    private const val U16_MAX = 0xFFFF
     private const val SCALE = 10000
     private const val CLEAR = 0xFFFF
     const val MIN_SWIPE_MS = 50
@@ -72,12 +104,37 @@ object Protocol {
     data class Point(val x: Float, val y: Float)
 
     sealed interface Message {
-        /** One chunk of the H.264 stream. A decoder needs a keyframe before anything else makes
-         *  sense; everything before the first one it sees should be dropped. */
-        class VideoChunk(val keyframe: Boolean, val width: Int, val height: Int, val data: ByteArray) : Message
+        /** One encoded frame. A decoder needs a keyframe before anything else makes sense, and
+         *  after any gap in [seq] it needs another one — everything in between depends on the
+         *  frame that went missing. */
+        class VideoFrame(
+            val keyframe: Boolean,
+            val codec: VideoCodec,
+            val width: Int,
+            val height: Int,
+            val seq: Int,
+            val sentAt: Int,
+            val data: ByteArray,
+        ) : Message
+        data class ReceiverReport(
+            val highestSeq: Int,
+            val echoSentAt: Int,
+            val holdMs: Int,
+            val queueDelayMs: Int,
+            val lostFrames: Int,
+        ) : Message
+        data object KeyframeRequest : Message
+        data class Decoders(val codecs: Set<VideoCodec>) : Message
+        data class SenderStats(
+            val quality: ConnectionQuality,
+            val bitrateKbps: Int,
+            val tier: Int,
+            val rttMs: Int,
+            val droppedFrames: Int,
+            val encoderSetup: Int,
+        ) : Message
         /** Sharing has begun; the picture itself may still be a moment away. */
         data object SharingStarted : Message
-        data class Connection(val quality: ConnectionQuality) : Message
         /** Fractions of the screen, 0..1. Null means "remove the pointer". */
         data class Pointer(val x: Float?, val y: Float?) : Message
         data object Stop : Message
@@ -90,18 +147,44 @@ object Protocol {
          *  it lifted off. [durationMs] is how long the whole path took. */
         data class GesturePath(val points: List<Point>, val durationMs: Int) : Message
         data class Nav(val action: NavAction) : Message
+        data class Touch(val phase: TouchPhase, val x: Float, val y: Float) : Message
     }
 
     private fun scaled(v: Float) = (v.coerceIn(0f, 1f) * SCALE).toInt().toShort()
 
-    fun videoChunk(keyframe: Boolean, width: Int, height: Int, data: ByteArray): ByteArray =
-        ByteBuffer.allocate(6 + data.size)
-            .put(VIDEO_CHUNK).put(if (keyframe) 1 else 0)
+    private fun u16(v: Int) = v.coerceIn(0, U16_MAX).toShort()
+
+    fun videoFrame(
+        keyframe: Boolean, codec: VideoCodec, width: Int, height: Int, seq: Int, sentAt: Int, data: ByteArray,
+    ): ByteArray {
+        val flags = (if (keyframe) 1 else 0) or (if (codec == VideoCodec.Hevc) 2 else 0)
+        return ByteBuffer.allocate(VIDEO_HEADER + data.size)
+            .put(VIDEO_FRAME).put(flags.toByte())
             .putShort(width.toShort()).putShort(height.toShort())
+            .putInt(seq).putInt(sentAt)
             .put(data).array()
+    }
+
+    fun receiverReport(r: Message.ReceiverReport): ByteArray = ByteBuffer.allocate(15)
+        .put(RECEIVER_REPORT).putInt(r.highestSeq).putInt(r.echoSentAt)
+        .putShort(u16(r.holdMs)).putShort(u16(r.queueDelayMs)).putShort(u16(r.lostFrames))
+        .array()
+
+    fun keyframeRequest(): ByteArray = byteArrayOf(KEYFRAME_REQUEST)
+
+    fun decoders(codecs: Set<VideoCodec>): ByteArray =
+        byteArrayOf(DECODERS, codecs.fold(0) { acc, c -> acc or c.bit }.toByte())
+
+    fun senderStats(s: Message.SenderStats): ByteArray = ByteBuffer.allocate(11)
+        .put(SENDER_STATS).put(s.quality.wire)
+        .putShort(u16(s.bitrateKbps)).put(s.tier.coerceIn(0, 127).toByte())
+        .putShort(u16(s.rttMs)).putShort(u16(s.droppedFrames)).put(s.encoderSetup.coerceIn(0, 127).toByte())
+        .array()
 
     fun sharingStarted(): ByteArray = byteArrayOf(SHARING_STARTED)
-    fun connectionQuality(quality: ConnectionQuality): ByteArray = byteArrayOf(CONNECTION_QUALITY, quality.wire)
+
+    fun touch(phase: TouchPhase, x: Float, y: Float): ByteArray =
+        ByteBuffer.allocate(6).put(TOUCH).put(phase.wire).putShort(scaled(x)).putShort(scaled(y)).array()
 
     fun pointer(x: Float, y: Float): ByteArray =
         ByteBuffer.allocate(5).put(POINTER).putShort(scaled(x)).putShort(scaled(y)).array()
@@ -151,18 +234,54 @@ object Protocol {
     fun parse(bytes: ByteArray): Message? {
         if (bytes.isEmpty()) return null
         return when (bytes[0]) {
-            VIDEO_CHUNK -> {
-                if (bytes.size <= 6) return null
-                val buf = ByteBuffer.wrap(bytes, 2, 4)
+            VIDEO_FRAME -> {
+                if (bytes.size <= VIDEO_HEADER) return null
+                val flags = bytes[1].toInt()
+                val buf = ByteBuffer.wrap(bytes, 2, VIDEO_HEADER - 2)
                 val w = buf.short.toInt() and 0xFFFF
                 val h = buf.short.toInt() and 0xFFFF
                 if (w == 0 || h == 0) return null
-                Message.VideoChunk(bytes[1] != 0.toByte(), w, h, bytes.copyOfRange(6, bytes.size))
+                Message.VideoFrame(
+                    keyframe = flags and 1 != 0,
+                    codec = if (flags and 2 != 0) VideoCodec.Hevc else VideoCodec.Avc,
+                    width = w, height = h, seq = buf.int, sentAt = buf.int,
+                    data = bytes.copyOfRange(VIDEO_HEADER, bytes.size),
+                )
+            }
+            RECEIVER_REPORT -> {
+                if (bytes.size != 15) return null
+                val buf = ByteBuffer.wrap(bytes, 1, 14)
+                Message.ReceiverReport(
+                    highestSeq = buf.int, echoSentAt = buf.int,
+                    holdMs = buf.short.toInt() and 0xFFFF,
+                    queueDelayMs = buf.short.toInt() and 0xFFFF,
+                    lostFrames = buf.short.toInt() and 0xFFFF,
+                )
+            }
+            KEYFRAME_REQUEST -> if (bytes.size == 1) Message.KeyframeRequest else null
+            DECODERS -> {
+                if (bytes.size != 2) return null
+                Message.Decoders(VideoCodec.entries.filter { bytes[1].toInt() and it.bit != 0 }.toSet())
+            }
+            SENDER_STATS -> {
+                if (bytes.size != 11) return null
+                val quality = ConnectionQuality.entries.firstOrNull { it.wire == bytes[1] } ?: return null
+                val buf = ByteBuffer.wrap(bytes, 2, 9)
+                Message.SenderStats(
+                    quality = quality,
+                    bitrateKbps = buf.short.toInt() and 0xFFFF,
+                    tier = buf.get().toInt(),
+                    rttMs = buf.short.toInt() and 0xFFFF,
+                    droppedFrames = buf.short.toInt() and 0xFFFF,
+                    encoderSetup = buf.get().toInt(),
+                )
             }
             SHARING_STARTED -> if (bytes.size == 1) Message.SharingStarted else null
-            CONNECTION_QUALITY -> {
-                if (bytes.size != 2) return null
-                ConnectionQuality.entries.firstOrNull { it.wire == bytes[1] }?.let { Message.Connection(it) }
+            TOUCH -> {
+                if (bytes.size != 6) return null
+                val phase = TouchPhase.entries.firstOrNull { it.wire == bytes[1] } ?: return null
+                val p = fractions(ByteBuffer.wrap(bytes, 2, 4), 2) ?: return null
+                Message.Touch(phase, p[0], p[1])
             }
             POINTER -> {
                 if (bytes.size != 5) return null

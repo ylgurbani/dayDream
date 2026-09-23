@@ -16,30 +16,27 @@ screen, and (once he says yes) tap, swipe and press Back/Home for him, never ins
 Either side can stop at any time. Tested on two Android 16 emulators through the real relay, with
 the grandad phone at 200% font.
 
-Screen sharing is a live H.264 video stream (hardware encode and decode via `MediaCodec`), not a
-series of still pictures — see "How the picture gets to the helper" in
-[docs/SECURITY.md](docs/SECURITY.md) for how that works and the real bugs found building it,
-including two found only once two real phones tried it genuinely far apart. First: the encoder had
-no cap on its own output rate, and the pointer ring's own animation could push it past the relay's
-message-rate limit, closing the connection almost every time the helper pointed at something —
-fixed with `FrameRateLimiter`, verified by deliberately hammering the pointer for half a minute.
-Second, on the next real long-distance test after that fix (a VPN connection in Bhutan to UK
-cellular data): the connection itself now held up, but the picture showed real tearing and
-pixelation, and stopped updating when his screen was mostly still — traced to keyframes being
-dropped by the same congestion logic meant to protect delta frames only, and a staleness clock
-that was reset by attempts rather than successes. Fixed, but **not yet verified live** — an
-attempt to test it under a deliberately throttled connection found the test itself was not
-actually throttling the traffic that mattered; see docs/SECURITY.md for the honest account of why.
+Screen sharing is a live video stream (H.264, or H.265 when both phones have it in hardware),
+encoded and decoded by the phones' own video hardware. Every frame is numbered, the helper reports
+four times a second on what arrived and how late, and the sharing phone uses that to pause capture
+when the link backs up, pick the bitrate, and step down to a smaller picture at fewer frames a
+second on a slow link. The picture freezes briefly on a correct image rather than ever showing a
+corrupted one. After a real long-distance test showed tearing and a picture that went stale, the
+worst causes turned out to be two of this app's own earlier mechanisms (dropping frames after
+encoding, and resending an old keyframe); both are gone. Measured since under a genuinely
+throttled link, on emulators only: see "How the picture gets to the helper" in
+[docs/SECURITY.md](docs/SECURITY.md).
 
-The bitrate adapts live to how the connection is actually coping (lower under real congestion,
-higher once it clears), and the helper sees a small Good/Fair/Poor indicator built from the same
-signal — not shown to him, deliberately, to keep his own screen simple. A drag now carries the
-whole path a finger took, not just a straight line between where it started and ended, which is
-what real swipes and scrolls actually need (dragging to reorder still needs a continuous
-press-then-move gesture the protocol does not support yet — see docs/SECURITY.md).
+The helper sees a small Good/Fair/Poor indicator (long-press it for detailed stats); he sees
+nothing of this, deliberately, to keep his own screen simple. In control mode, the helper can tap,
+swipe, press and hold (a long-press), and press, hold and drag to move something, such as
+reordering a list or moving an icon. Turning his phone sideways while sharing works.
+
+**Both phones must run the same version**: the video messages changed, and an older phone will
+connect but show no picture.
 
 **Not built yet:** the floating HOME button (Back/Home from the helper cover most of it), Hindi/Gujarati
-text, push notifications when he taps Get Help, and rotation while sharing.
+text, and push notifications when he taps Get Help.
 
 ## Layout
 
@@ -53,8 +50,8 @@ docs/          security and design notes
 
 ```bash
 export JAVA_HOME=/opt/homebrew/opt/openjdk@23/libexec/openjdk.jdk/Contents/Home
-./gradlew assembleDebug testDebugUnitTest      # app + 59 unit tests
-cd relay-server && npm install && npm test     # 10 relay tests
+./gradlew assembleDebug testDebugUnitTest      # app + 82 unit tests
+cd relay-server && npm install && npm test     # 12 relay tests
 ```
 
 The debug APK is `app/build/outputs/apk/debug/app-debug.apk`.
@@ -69,10 +66,14 @@ The debug build defaults to `ws://10.0.2.2:8787`, the emulator's name for your c
 both, then: on the helper phone long-press "Yattu Bhaa", set a PIN, **Set up a new phone**; deliver
 the link to the other phone; tap **Yes, connect**; tap **Get Help**; type the number on the helper.
 
+To try it over a slow, laggy connection, see "Test on a slow, laggy connection" in
+[relay-server/README.md](relay-server/README.md).
+
 ## Using it for real
 
-1. **Deploy the relay** somewhere with TLS: see [relay-server/README.md](relay-server/README.md).
-   Nothing is deployed yet and no hosting account has been created.
+1. **Deploy the relay** somewhere with TLS: see [relay-server/README.md](relay-server/README.md) and
+   [docs/SETUP-RELAY.md](docs/SETUP-RELAY.md). Where it runs matters: for India and the UK,
+   Render's Frankfurt region rather than its default, Oregon (a region cannot be changed later).
 2. **Get the app onto his phone.** This is the open question: a sideloaded APK needs him (or you,
    guiding him) to allow "install unknown apps". Play Store testing tracks are easier for him but
    need a developer account. The debug APK works over `wss://` but is debug-signed.

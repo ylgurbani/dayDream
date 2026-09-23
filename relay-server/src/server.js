@@ -8,6 +8,7 @@
 // Production must run behind TLS (wss://). Fly.io, Render, Railway and Caddy/nginx all
 // terminate TLS for you; do not expose this process on plain ws:// to the internet.
 
+import { createHash } from 'node:crypto';
 import http from 'node:http';
 import { pathToFileURL } from 'node:url';
 import { WebSocketServer } from 'ws';
@@ -73,15 +74,25 @@ export function createRelay(overrides = {}) {
     heartbeatMs: 25000,
     maxRooms: 1000,
     maxConnectionsPerIp: 10,
-    // Shared by every message type on one connection, video included. A surface-input encoder
-    // has no frame-rate cap of its own (see ScreenEncoder's FrameRateLimiter, added after
-    // real-world testing found this exact limit closing the connection — reliably, right as
-    // pointing at something on the mirrored screen, because the pointer ring's own pulsing
-    // animation is itself captured, briefly pushing the encoder's real output rate well past what
-    // this used to allow). That client-side fix is the real one; this is raised too, as a margin,
-    // not as the fix itself.
-    maxMessagesPerSecond: 150,
-    maxBufferedBytes: 4 * 1024 * 1024, // drop frames for a slow peer instead of buffering forever
+    // Abuse limits, per connection, counting every message type (video included). Neither is
+    // meant to be anywhere near what the app itself sends; both close the connection when hit.
+    //
+    // Messages per second: the app now caps its own video frame rate before encoding (it used to
+    // throw away encoded frames instead, which corrupted the picture - see ScreenEncoder), so its
+    // real rate is ~20 video frames plus a few small messages a second. This once sat close enough
+    // to the app's real rate that the pointer ring's animation tipped it over and closed sessions.
+    maxMessagesPerSecond: 300,
+    // Bytes per second, as a token bucket: a sustained rate plus a burst allowance. A message
+    // count alone let one connection push up to ~300 messages x 2MB = 600MB a second. The app's
+    // highest video bitrate is 2.5 Mbps (~0.3MB/s), so 1MB/s sustained with a 6MB burst is over
+    // three times that, with room for any keyframe.
+    maxBytesPerSecond: 1024 * 1024,
+    maxBurstBytes: 6 * 1024 * 1024,
+    // A peer that cannot keep up gets frames dropped rather than buffered without limit. Was 4MB,
+    // which at a low bitrate is minutes of video - by then every frame is far too late to be
+    // useful. The app notices a dropped frame (every frame is numbered) and asks for a fresh
+    // keyframe, and normally lowers its own bitrate long before this is reached.
+    maxBufferedBytes: 1024 * 1024,
     ...overrides,
   };
 
@@ -139,19 +150,28 @@ export function createRelay(overrides = {}) {
     let role = null;
     let windowStart = Date.now();
     let windowCount = 0;
+    let byteTokens = cfg.maxBurstBytes;
+    let tokensAt = Date.now();
+    let closing = false; // messages already in flight still arrive after close(); ignore them
     ws.isAlive = true;
     ws.on('pong', () => { ws.isAlive = true; });
 
     const joinTimer = setTimeout(() => ws.close(4001, 'join timeout'), cfg.joinTimeoutMs);
 
     ws.on('message', (data, isBinary) => {
+      if (closing) return;
       const now = Date.now();
       if (now - windowStart >= 1000) { windowStart = now; windowCount = 0; }
-      if (++windowCount > cfg.maxMessagesPerSecond) {
-        // Metadata only (role and a count), never content - consistent with what this relay
-        // already sees regardless. Logged because this specific close was hard to diagnose
-        // without it: it looks identical to an ordinary drop from the outside.
-        console.warn(`rate limit: closing ${role || 'unjoined'} in room ${roomId}`);
+      byteTokens = Math.min(cfg.maxBurstBytes, byteTokens + ((now - tokensAt) / 1000) * cfg.maxBytesPerSecond);
+      tokensAt = now;
+      byteTokens -= data.length;
+      const limit = ++windowCount > cfg.maxMessagesPerSecond ? 'messages' : byteTokens < 0 ? 'bytes' : null;
+      if (limit) {
+        // Metadata only (role, which limit, a short tag for the room), never content. Logged
+        // because this close was hard to diagnose without it: from the outside it looks identical
+        // to an ordinary drop.
+        console.warn(`rate limit (${limit}): closing ${role || 'unjoined'} in room ${roomTag(roomId)}`);
+        closing = true;
         ws.close(1008, 'rate limit');
         return;
       }
@@ -183,6 +203,12 @@ export function createRelay(overrides = {}) {
       if (role) leaveRoom(roomId, role, ws);
     });
     ws.on('error', () => ws.terminate());
+  }
+
+  // Enough to tell rooms apart in a log, not the room id itself: that id is stable for as long as
+  // the two phones stay paired, so a log holding it would link every session they ever have.
+  function roomTag(roomId) {
+    return createHash('sha256').update(roomId).digest('hex').slice(0, 8);
   }
 
   function peerOf(roomId, role) {

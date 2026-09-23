@@ -189,10 +189,23 @@ class SessionOverlay(private val context: Context, private val onStop: () -> Uni
 
     private fun dp(value: Int) = (value * context.resources.displayMetrics.density).toInt()
 
-    /** A pulsing ring with a filled centre, drawn where the helper pointed. */
+    /**
+     * A ring with a filled centre, drawn where the helper pointed, that pulses a couple of times
+     * to catch his eye and then holds still. It used to pulse for as long as it was shown — and
+     * since it is on his screen, it is in the captured picture too, so a pulsing ring kept the
+     * encoder busy with a stream of frames that told the helper nothing new, at the cost of the
+     * bandwidth that actually mattered on a slow link.
+     */
     private class PointerView(context: Context) : View(context) {
         var target: Pair<Float, Float>? = null
-            set(value) { field = value; invalidate() }
+            set(value) {
+                val moved = value != null && value != field
+                field = value
+                animator.cancel()
+                pulse = 0f
+                if (moved) animator.start()
+                invalidate()
+            }
 
         private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE
@@ -202,12 +215,11 @@ class SessionOverlay(private val context: Context, private val onStop: () -> Uni
         private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(70, 255, 213, 79) }
         private var pulse = 0f
         private val animator = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 900
-            repeatCount = ValueAnimator.INFINITE
+            duration = 700
+            repeatCount = PULSE_RUNS - 1 // out and back twice, ending where it started
             repeatMode = ValueAnimator.REVERSE
             interpolator = LinearInterpolator()
             addUpdateListener { pulse = it.animatedValue as Float; if (target != null) invalidate() }
-            start()
         }
 
         fun stopAnimating() = animator.cancel()
@@ -218,6 +230,10 @@ class SessionOverlay(private val context: Context, private val onStop: () -> Uni
             val radius = (36f + 16f * pulse) * d
             canvas.drawCircle(fx * width, fy * height, radius, fill)
             canvas.drawCircle(fx * width, fy * height, radius, ring)
+        }
+
+        private companion object {
+            const val PULSE_RUNS = 4
         }
     }
 }

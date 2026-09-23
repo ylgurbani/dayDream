@@ -1,6 +1,11 @@
 # Paths below are relative to the REPO ROOT, not to this file's own location, even though this
 # file lives in relay-server/ — that's how Render's Blueprint spec resolves dockerfilePath and
 # dockerContext, and getting it wrong here is what makes a build fail with "cannot find /src".
+#
+# No region is set, so Render uses its default: Oregon. For phones in India and the UK, Frankfurt
+# is much closer to both (see docs/SETUP-RELAY.md, "Where the relay runs matters"). Render cannot
+# change an existing service's region, so a `region:` line is deliberately not added here: it would
+# not move a service that already exists. Choose Frankfurt when creating a new one instead.
 services:
   - type: web
     name: yattu-bhaa-relay

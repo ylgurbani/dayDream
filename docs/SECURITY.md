@@ -102,6 +102,15 @@ offered the Settings trip the first time ever, never on a return visit. Fixed: t
 sends him to Settings whenever the switch is not actually on, first time or not — sending him there
 carries no cost any more (see below), so there is no reason left to ever leave him stuck.
 
+Whether the switch is on is now read from Android's own record of enabled accessibility services
+(`ControlCapability.isSwitchedOn`), not guessed from how long the service takes to connect. The
+guess got both cases wrong: the first time, he waited three seconds for a trip to Settings that
+was always going to be needed; and on an older phone slow to reconnect a service that *was*
+switched on, he could be sent to Settings for nothing. Now: switched off, he goes to Settings at
+once (measured: Android's Accessibility screen in front 0.17s after tapping Allow, on an
+emulator); switched on but still connecting, it waits for the connection and never sends him to
+Settings.
+
 ## Remote tap and swipe: how it is contained
 
 - The helper can only **ask**. A full-screen "Allow / Not now" question appears on his phone, on top
@@ -116,6 +125,13 @@ carries no cost any more (see below), so there is no reason left to ever leave h
   The helper is told when taps are paused. I found and fixed a real hole in this while testing: an
   earlier version remembered the last window event, which is wiped when Android rebinds the service
   (for example when any app is installed), and treated "unknown" as "allowed".
+- **Press, hold and drag** (moving an icon, reordering a list) is streamed live, one step at a
+  time, rather than sent whole once the finger lifts, so the same rules are applied to *every*
+  step, not just the first: a drag that reaches a banking app is let go on the spot. The held
+  finger is also lifted the moment control ends for any reason (Give back, Stop, the session
+  ending, a secure app), and on its own if the helper's connection goes quiet for five seconds
+  mid-drag — a finger is never left pressed on his screen. Lifting is always allowed, like Back
+  and Home: it can only let go. See `RemoteInputAccessibilityService.touch`.
 - The service does not read what is on the screen. It declares the ability to see windows only so it
   can read those package names. Android's own "full control" warning uses generic wording that
   sounds broader than that.
@@ -164,173 +180,123 @@ this app could set.
 
 ## How the picture gets to the helper
 
-Screen sharing is a live H.264 video stream, encoded and decoded by the phone's own video
-hardware (`MediaCodec`, surface-in/surface-out — the same technique scrcpy and other screen
-mirroring tools use), not a series of still pictures. His screen draws straight into the
-encoder's input surface, and the compressed picture draws straight onto the helper's screen, with
-no bitmap ever copied through app code on either side. This replaced an earlier JPEG-per-frame
-pipeline that had to read every frame back to a `Bitmap` and JPEG-encode it in software; the CPU
-cost of that path capped both how large a picture could be sent and how often. See
-`ScreenEncoder.kt` and `VideoDecoder.kt`.
+Screen sharing is a live video stream, encoded and decoded by the phones' own video hardware
+(`MediaCodec`, surface-in/surface-out, the same technique scrcpy uses): his screen draws straight
+into the encoder, the compressed picture draws straight onto the helper's screen, and no bitmap is
+ever copied through app code. It replaced a JPEG-per-frame pipeline that did all of that in software.
 
-Two things were found the hard way while building this, both now handled without depending on
-whichever turns out to be true on a given phone:
+What happens to each frame, as of the third round of real-world fixes (see below for why):
 
-- **A key that should have worked did not, on every device.** `MediaFormat.KEY_PREPEND_HEADER_TO_SYNC_FRAMES`
-  is the documented way to ask the encoder to make every keyframe self-contained. On one real
-  encoder (an emulator's software AVC encoder) asking for it made `configure()` fail outright, not
-  just get ignored. Fixed by not asking for it at all: `ScreenEncoder` instead caches the SPS/PPS
-  bytes the encoder emits once at the start and prepends them, by hand, to every keyframe itself —
-  the same end result, achieved a way that does not depend on that key being supported anywhere.
-- **A decoder that never decoded anything, and never said why.** Because the picture is a
-  continuous stream, not one request per frame, the helper's decoder can come into existence
-  (its `SurfaceView` ready, the picture's size known) independently of which particular chunk
-  happens to be arriving at that moment. Built and tested wrong the first time: a decoder created
-  right as an ordinary (non-keyframe) chunk arrived would happily accept it as its first input,
-  even though a delta frame only means anything relative to a keyframe the decoder has already
-  seen — it accepted chunk after chunk, forever, and decoded nothing, ever, with no error from
-  Android at any point. Caught by checking, not assuming: logging exactly what bytes the encoder
-  sent and what bytes the decoder fed the codec, and finding the two did not start at the same
-  place. Fixed with an explicit "still waiting for a keyframe" flag on the decoder, cleared only
-  once one has actually been fed to the current codec instance — see `VideoDecoder.submit()`.
+- **Capture.** The encoder is told to skip frames beyond a set rate *before* encoding them
+  (`KEY_MAX_FPS_TO_ENCODER`), and to repeat the current picture when the screen is still
+  (`KEY_REPEAT_PREVIOUS_FRAME_AFTER`), so the stream never goes quiet and a still screen keeps
+  sharpening. Optional settings are tried in layers, so an encoder that rejects one still works
+  (`ScreenEncoder`).
+- **Numbering.** Every frame sent carries a sequence number and its send time.
+- **Receiver reports.** Four times a second the helper says which frame it has got up to, and how
+  much queueing delay frames are picking up on the way — measured against the quietest recent
+  moment, so the two phones' clocks never need to agree (`ReceiveTracker`, `SendTracker`).
+- **Flow control.** When frames already sent are not getting through in reasonable time — too many
+  bytes, or too old, still unconfirmed — capture is *paused* at the source, and resumed with an
+  ordinary frame when the link clears (`SendGate`). Nothing already encoded is thrown away in the
+  normal course of things, so the chain of frames the helper decodes is never broken.
+- **Keyframes on demand.** After any gap in the numbers, the helper's decoder keeps showing the
+  last correct picture and asks for a keyframe; periodic keyframes are only a 10-second safety net
+  (`VideoDecoder`). Frames that arrive before the helper's screen is laid out are held and shown the
+  moment it is, rather than dropped.
+- **Adapting.** From the reports, `CongestionController` halves the bitrate when the picture is
+  queueing anywhere on the way (or capture is being held back most of the time), climbs back
+  slowly when it is clear, and below a point steps down to a smaller picture at a lower frame rate
+  — 720, then 544, then 432 pixels across at 20, 15, 10 frames a second — because for reading his
+  screen, fewer crisp frames beat many blurry ones. `OvershootCorrector` measures what the encoder
+  actually produces and scales what it is asked for, since encoders do not always hit their target.
+- **H.265** is used instead of H.264 when both phones have it in hardware and it supports the size
+  (about a third fewer bits for the same picture); anything that fails falls back to H.264.
+- **Rotation** restarts the encoder at the new shape; the helper's view follows.
 
-A screen that never changes produces no new video frames at all (this is normal for any
-compositor-driven capture, not a bug), so the last keyframe is resent whenever nothing new has
-gone out for a second (`ScreenShareService`'s keepalive timer) — both so a freshly connected or
-reconnected helper is never left looking at nothing for long, and as a safety net against a chunk
-lost to a slow connection. Tightened from an initial 3 seconds after real-device testing (two
-phones on different networks, one deliberately left running for two minutes first to rule out a
-cold relay) found the wait before the first picture appeared noticeably long, and still does on a
-real network even with that ruled out. Since the exact remaining cause (real hardware codec
-warm-up, real network conditions, or something else) is not yet pinned down, a `SharingStarted`
-message is now sent the instant sharing begins, well before any picture could possibly have
-arrived, so the helper can show "connecting" rather than a screen that gives no sign anything is
-happening — improving what the wait *feels* like even where the wait itself has not been
-shortened further.
+The helper can long-press the Good/Fair/Poor indicator for a small stats overlay (codec, size,
+frame rate, bitrate, queueing delay, round trip, frames lost, keyframes asked for), meant for
+reporting what happened on a real test.
 
-### The bitrate adapts to the connection, and the helper can see how it is doing
+### Round three: what was really causing the tearing and the stale picture
 
-The target bitrate is not fixed. `BitrateAdapter` samples how many bytes of picture are queued on
-his phone but not yet actually sent (`RelayClient.backlogBytes`, via
-`NeedySession.outgoingBacklogBytes`) roughly every two seconds, and adjusts the encoder's live
-target the same way TCP congestion control does: a queue backing up drops the bitrate
-immediately, by a set fraction; a queue that has stayed empty for a few samples in a row raises it
-again, one small step at a time. `MediaCodec` accepts a bitrate change on a running encoder
-directly (`ScreenEncoder.setBitrate`), so this never needs to reconfigure or recreate the encoder,
-the virtual display, or the helper's decoder — only the target number changes, live. Deliberately
-does not touch resolution or frame rate: those would need exactly that heavier reconstruction, for
-a smaller and less certain gain than simply asking for fewer (or more) bits per frame from the
-picture already flowing. Bounded between 400 kbps and 2.5 Mbps; verified on an emulator (imperfect
-but real evidence, since it involves genuine encode, transmit and decode, not a simulated number):
-a real burst of frames at the start of a session backed the queue up, dropped the bitrate, and
-reported it — visibly, live, on the helper's own screen (see below) — before climbing back to the
-ceiling on its own once the queue had stayed empty for a few seconds.
+The long-distance test before this one (a VPN in Bhutan to UK cellular) showed tearing, heavy
+pixelation, and a picture that did not update when his screen was still. Re-reading the whole
+pipeline found that the two worst causes were mechanisms added in earlier rounds, not the network:
 
-The same signal drives a small, quiet **connection-quality indicator** next to the status line on
-the helper's screen only — a colored dot and a word (Good, Fair, Poor), not a number or a graph.
-Deliberately not shown to him: he already cannot see technical detail comfortably, and a raw
-quality readout would be one more confusing thing on a screen kept as simple as possible on
-purpose. The helper is the technical user here, and the one who can actually act on knowing the
-link is struggling (wait, or suggest moving closer to the router) rather than assume the app itself
-is broken.
+- **Frames were thrown away after encoding.** A frame-rate cap (`FrameRateLimiter`, added to stop
+  the relay's rate limit closing sessions) dropped encoded frames over the cap, and the backlog
+  protection dropped them too. But every frame except a keyframe only describes what changed since
+  the frame before it; the helper decoded each frame after a dropped one against the wrong picture
+  — smearing and blockiness, during any movement, until the next keyframe up to two seconds later.
+- **A "keepalive" rewound the picture.** When nothing had been sent for a second, the last
+  *keyframe* was resent — but on a screen that changed and then went still, that keyframe was up to
+  two seconds out of date, so the helper's picture snapped back to how the screen used to look,
+  every second.
 
-### A real, disruptive bug: the encoder's own output rate had no ceiling
+Both are gone (see above). Testing the replacement on a deliberately slowed connection then found
+more, each fixed and re-measured:
 
-Real-world testing with two phones genuinely far apart found the session disconnecting roughly
-every ten seconds, and doing so almost every time the helper pointed at something. Root cause,
-found by re-reading the two places that actually decide this rather than guessing: a surface-input
-encoder has no frame-rate limit of its own — `MediaFormat.KEY_FRAME_RATE` is only a hint used for
-bitrate math, not an enforced cap, so the encoder processes every frame the compositor draws to its
-input surface, however often that happens to be. Most of the time a phone screen is close enough
-to still that this does not matter. But the pointer ring's own pulsing animation is drawn on his
-screen too, so it is captured like anything else — while it is on, the compositor can be redrawing
-at the display's full refresh rate, and the encoder followed it, producing far more video chunks
-per second than usual, each one its own message to the relay. The relay caps how many messages one
-connection may send per second and closes it over the limit — a real, useful defence in general,
-but tuned for the old JPEG pipeline's own explicit ~4fps throttle, never revisited when that
-pipeline was replaced with one that has no throttle of its own. The two together meant: point at
-something, the ring starts pulsing, the encoder's real output rate spikes, the relay's limit is hit,
-the connection is closed — which is exactly "almost always crashes the connection immediately."
+- **25 seconds behind.** After a sudden drop from 2.5 Mbps to 400 kbps, the phone's own send queue
+  stayed small while over a megabyte sat in the operating system's network buffers beneath it —
+  the "bufferbloat" real mobile networks have too. Fixed by capping what may be sent but
+  unconfirmed by the helper, in both bytes and age: 25 seconds became about 3 at worst, and around
+  half a second once settled.
+- **A keyframe storm.** Holding back frames and then asking for a keyframe after every hold-up
+  meant a large keyframe every few seconds on the slowest links, congesting them again. Fixed by
+  pausing capture instead: 13 to 20 keyframes a minute and a half became about 5.
+- **Encoder overshoot.** While scrolling, the test encoder produced two to four times its target.
+  Fixed by measuring and correcting for it, and by the byte cap above.
+- **A deadlock after a lost connection.** Restarting the relay mid-session lost the frames in
+  flight; the helper could never confirm them, and capture waited for them forever — the
+  connection recovered but the picture never did. Fixed: a reconnect settles everything sent
+  before it, and frames with no progress for three seconds are given up on. Verified by restarting
+  the relay mid-session while scrolling: 13 frames lost, one keyframe asked for, picture back and
+  correct within seconds.
+- **Too slow to step down.** At the middle size, capture could be held back almost continuously
+  for 17 seconds while the controller waited for delay evidence that paused capture was barely
+  producing. Fixed by treating "held back most of the time" as congestion itself: 17 seconds
+  became about 5.
 
-Fixed at the source, not by papering over it at the limit: `ScreenEncoder` now runs every delta
-(non-keyframe) chunk past a `FrameRateLimiter` before forwarding it, capping the real output rate
-to about 25fps — smoother than the ~4fps the old pipeline ran at, comfortably under what the relay
-allows, keyframes never held back. Verified live, not just reasoned about: with the fix in place,
-tapping to point roughly forty times over half a minute — deliberately harder and faster than
-normal use, to make sure the old failure would have shown up if the fix had not actually worked —
-produced zero rate-limit closes (the relay now logs this event by name specifically because it
-was hard to diagnose without that), and the session, the picture and the ring all stayed correct
-throughout. The relay's own limit was also raised a little as a margin, and its heartbeat (how
-long it waits without a reply before deciding a connection is dead) was eased back from an
-earlier, over-tightened value — 10 seconds turned out to be too little slack for a real
-connection's own real latency, especially while it is also carrying active video, and it does
-not need to be that tight now that `ScreenShareService.onTaskRemoved` handles the common "app
-closed" case directly, without depending on this heartbeat at all.
+**How this was tested**, since the last round's "throttled" test turned out not to be throttled
+at all (an emulator's own throttling does not apply to the address a local relay lives at):
+`relay-server/tools/netem-proxy.js` sits between one emulator and the relay and genuinely limits
+bandwidth, with a queue behind it, delay and jitter. (Its first version reordered bytes under
+jitter; the app correctly rejected the corrupted stream as tampering and ended the session.)
+On a 350 kbps link with 180ms delay and 40ms jitter, scrolling Settings continuously for 40
+seconds, after settling: 432 pixels across, 8 to 11 frames a second, a 400 to 700ms round trip
+(of which 360ms is the link's own), queueing mostly under 250ms, no frames lost, no keyframes
+needed, and every screenshot free of corruption; the picture stepped back up to the middle size
+once scrolling stopped. On an unthrottled link, a still screen costs about 20 kbps.
 
-### A genuinely slow, high-latency real link: dropped keyframes, and a clock that lied
+**Still not verified on real phones**: every number here comes from two emulators, whose software
+encoder overshoots far more than a phone's hardware one — real phones should do better, but that
+is a prediction, not a measurement. H.265 was exercised end to end only by forcing the emulators'
+software codecs at a small size (they are capped at 512x512); on real hardware it is untested.
 
-The rate-limit fix above made the connection *stable*, but a real test straight after it — two
-phones genuinely on opposite sides of the world, one on a slow mobile connection through a VPN —
-found the *picture itself* was not holding up: real tearing and pixelation, and in particular a
-picture that stopped updating whenever his screen was mostly still. Traced to two more real bugs
-in the same area, both about how a *sustained*, not just brief, backlog was handled — different
-from the momentary blips the pipeline was already built to tolerate:
+### Earlier rounds, briefly
 
-- **A dropped keyframe is not the same as a dropped delta frame, and the code was treating them
-  the same.** `NeedySession.sendVideoChunk` drops a chunk outright once too much picture is
-  already queued but not sent — a deliberate choice, meant to bound latency rather than let a slow
-  link fall further and further behind. Dropping an ordinary delta frame this way is fine: it is a
-  self-healing glitch, healed by the next keyframe. But the *keyframe* was subject to that exact
-  same threshold, with nothing giving it any more priority than an ordinary frame — so on a
-  connection persistently slow enough to sit above that threshold (not just occasionally, briefly
-  over it), the one thing that was ever going to fix the picture could itself keep getting dropped,
-  with nothing to take its place. Fixed: a keyframe now gets a much larger allowance than a delta
-  frame before it is dropped (the delta frame's own threshold was tightened at the same time, to
-  keep latency down now that it is not also trying to protect keyframes).
-- **The clock deciding "has anything actually reached him lately" was being reset by attempts, not
-  successes.** `ScreenShareService` tracks when a chunk was last sent so it knows when to fall back
-  to resending a cached keyframe — but that clock was being updated the moment a send was
-  *attempted*, before its result was even checked. A phone is essentially never perfectly still (a
-  status bar, some system animation), so on a persistently congested link, ordinary attempts kept
-  resetting the clock every time, even while every single one of them was being silently dropped —
-  meaning the one mechanism whose entire job is noticing "nothing is actually getting through"
-  could be fooled into thinking everything was fine, indefinitely. Fixed: the clock now only
-  advances on an actual successful send.
-- **The bitrate adapter was backing off too gently, and its floor was not low enough.** Its
-  decrease factor was gentler than ordinary TCP-style congestion control, taking around ten
-  seconds of sustained congestion to reach even its old floor — ten seconds of asking an already
-  struggling connection for more than it could carry. Tightened to halve on congestion (standard
-  AIMD), and the floor itself lowered, since the old one still was not low enough for what a real
-  bad connection turned out to need.
-
-**Honestly caveated, not just asserted:** the pure decision logic behind all of this is unit
-tested. Live verification was attempted by throttling an emulator's simulated network to a
-genuinely poor connection (as low as 120kbps, well under the new floor, with 300-400ms of added
-latency) while actively scrolling on the needy side, and the picture stayed clean throughout at
-every level tried — but that test turned out not to prove what it looked like it proved: `ping`
-to the relay showed sub-millisecond latency throughout, regardless of what the emulator's network
-throttle was set to, because `10.0.2.2` (the special address an emulator uses to reach its own
-host machine) is not actually subject to the emulator's simulated radio characteristics — it is a
-direct, un-throttled hairpin route. So while the *reasoning* behind these fixes is sound (each one
-traces a real, confirmed defect in the exact code that was checked, not a guess), and the
-*pure logic* is tested, the actual behaviour under real constrained bandwidth has not been
-verified live — only reasoned about and unit tested. The next real test, the way the bug that
-prompted this section was itself found, is the one that will actually confirm it.
+- A key that should have made every keyframe self-contained (`KEY_PREPEND_HEADER_TO_SYNC_FRAMES`)
+  made `configure()` fail on a real encoder; the codec config is prepended by hand instead.
+- A decoder created while a non-keyframe was arriving accepted input forever and decoded nothing;
+  it now waits for a keyframe, and (this round) asks for one.
+- The pointer ring's endless pulse, captured like anything on his screen, pushed the encoder's
+  output past the relay's message limit and closed sessions the moment the helper pointed. The
+  frame-rate cap added for that is the one that caused the tearing above; the ring now pulses
+  twice and holds still, and the relay now limits bytes as well as messages, with room to spare.
+- The first bitrate adapter only watched his phone's own send queue, so it could show "Good" while
+  the helper's picture was seconds behind. It is replaced by `CongestionController` above.
 
 ## Known limitation: the ring can look briefly stale in the picture itself
 
 The Stop button, banner and pointer ring are real content drawn on his screen, so they are part of
-what the mirrored picture captures — including the ring, which means the picture can keep showing
-it for a moment after "Clear ring" until the next captured frame reaches the helper. Tried excluding
-these overlay windows from capture with `FLAG_SECURE`: on this Android version that blanks the
-*entire* captured frame to black, not just that window's own pixels, so it was reverted (see
-`SessionOverlay.kt`). What is fixed: the specific case where switching from Point mode into "tap for
-them" left a ring stuck on his screen with no way to clear it at all — that ring is now cleared
-automatically the moment you switch. What remains is only the brief lag between clearing a ring and
-the next picture confirming it. The move to a live video pipeline (above) should make this lag
-considerably shorter in practice — a captured frame no longer waits on a software JPEG encode
-before it can be sent — but this has not been directly measured, only reasoned about from the
-architecture, so it is recorded here as expected rather than confirmed.
+what the mirrored picture captures — the picture can keep showing a ring for a moment after "Clear
+ring", until the next captured frame arrives. Excluding these windows from capture with
+`FLAG_SECURE` blanks the *entire* captured frame to black on this Android version, so it is not
+used (see `SessionOverlay.kt`). Switching from Point mode into "tap for them" clears the ring
+automatically. The ring pulses twice to catch his eye and then holds still: an endlessly pulsing
+ring made the encoder send a stream of frames that told the helper nothing new, using bandwidth
+that mattered on a slow link.
 
 ## Not verified
 
@@ -349,15 +315,14 @@ architecture, so it is recorded here as expected rather than confirmed.
 - Tested on two Android 16 emulators, and since on two real phones over a real long-distance
   connection (one on a VPN in Bhutan, one on UK cellular data) — not yet on an older Motorola, or
   Android 14/15.
-- **The video pipeline's exact latency has still not been measured, only reasoned about and
-  partly observed.** The real long-distance test above showed the connection itself staying
-  stable and the picture eventually catching up, but gave no precise number, and the
-  congestion-handling fixes it prompted (see above) have only been unit tested and reasoned about
-  since — an attempt to verify them live under a genuinely throttled connection found the test
-  itself was not throttling the traffic that mattered (see that section), so they remain unproven
-  under real constrained bandwidth specifically, as opposed to correctness in general, which is
-  checked by watching the actual bytes the encoder produced and the decoder consumed, not just by
-  eye.
+- **The video pipeline has been measured under genuinely constrained bandwidth, but only on
+  emulators** (see "How this was tested" above). Real phones, a real mobile network, and hardware
+  H.265 are all still to be tried. The helper's stats overlay is there so that test can say what
+  actually happened.
+- **Press, hold and drag, rotation, and the new Allow/Settings logic were tested on emulators
+  only**: an app icon was picked up and moved on his home screen from the helper's picture, a hold
+  without moving opened the icon's menu (a long-press), taps landed correctly in landscape, and
+  rotating mid-session showed the new shape on the helper's screen in well under a second.
 - The relay's `/join` page (which hands a tapped link to the app) is tested only as a served page,
   not through a real browser. The app's side of that hand-off was tested by sending the same
   `yattubhaa://pair?...` link directly.
@@ -370,24 +335,23 @@ architecture, so it is recorded here as expected rather than confirmed.
 - The pairing link passes through whatever chat app carries it. The six digit number is what stops
   a leaked link from being enough on its own.
 - The Helper PIN only keeps Helper mode out of the way. It is not a security boundary.
+- **Both phones need the same version of the app.** The video messages changed in the third round
+  (every frame now carries a number and a send time, and the helper reports back); an older phone
+  and a newer one will connect, but the helper will see no picture. There is no version check yet
+  to say so on screen.
 - **Screen sharing shows whatever is on his screen.** Screens that block capture (`FLAG_SECURE`,
   which most banking apps use) appear black, and nothing here tries to change that. But
   notifications, messages and one-time codes are visible. Ask him to choose "Share one app" in
   Android's dialog when the problem is in a single app, and to stop sharing when done.
-- Rotating the phone while sharing is not handled yet.
-- While he is sent to Android's accessibility screens, our overlay (Stop button, pointer) is lifted,
-  because Android disables its own "Allow" button while anything is drawn over it. It comes back once
-  the switch is on, or after two minutes. Android's own red screen-sharing timer stays throughout.
+- While Android's own Settings app is in front (including when he is sent there to switch the
+  accessibility service on), Android hides every overlay, ours included; it comes back the moment
+  he leaves Settings. Android's own red screen-sharing indicator stays throughout.
 - Force-stopping the app (Settings > Apps > Force stop) makes Android switch its accessibility
   service off, so he would have to turn it on again.
-- A drag still cannot pick something up and hold it before moving — real drag-and-drop reordering
-  (long-press an item, then move it without lifting) needs a single continuous gesture from press
-  to release, and the protocol only has a discrete long-press and a discrete drag, not a way to
-  chain the two into one unbroken touch. What the drag *does* carry now is the whole path a finger
-  actually took, not just where it started and ended (see `GESTURE_PATH` in `Protocol.kt`), which
-  is what ordinary swipes, scrolls and slider drags rely on — that part is fixed, verified by
-  dragging on the mirrored picture and watching a long settings list actually scroll through it,
-  not just jump.
+- A held drag on his phone plays back the helper's movement in steps as they arrive, so on a slow
+  connection it can move in small hops rather than smoothly; it never lets go early, since his
+  phone keeps the finger down between steps however long the next one takes. Quick swipes and
+  scrolls are still sent whole once the finger lifts, so their speed survives any lag intact.
 
 ## What this app must not become
 

@@ -8,7 +8,10 @@ import okhttp3.WebSocketListener
 import okio.ByteString
 import okio.ByteString.Companion.toByteString
 import org.json.JSONObject
+import java.net.InetAddress
+import java.net.Socket
 import java.util.concurrent.TimeUnit
+import javax.net.SocketFactory
 
 /** One WebSocket to one room on the relay. Reports presence of the other phone and raw bytes. */
 class RelayClient(
@@ -26,6 +29,7 @@ class RelayClient(
     private val client = OkHttpClient.Builder()
         .pingInterval(20, TimeUnit.SECONDS)
         .readTimeout(0, TimeUnit.MILLISECONDS)
+        .socketFactory(NoDelaySocketFactory)
         .build()
 
     @Volatile private var socket: WebSocket? = null
@@ -72,4 +76,23 @@ class RelayClient(
         socket?.close(1000, "bye")
         client.dispatcher.executorService.shutdown()
     }
+}
+
+/**
+ * Plain sockets with Nagle's algorithm switched off. Left on (Java's default, and OkHttp does not
+ * change it), a small message written while earlier data is still unacknowledged — a tap, a tiny
+ * video frame — waits for that acknowledgement before it goes, up to a whole round trip to the
+ * relay: latency added on exactly the kind of long-distance link this app is for. TLS sits on top
+ * of these sockets, so this applies to wss:// as well.
+ */
+private object NoDelaySocketFactory : SocketFactory() {
+    private val system = getDefault()
+    private fun Socket.noDelay() = apply { tcpNoDelay = true }
+    override fun createSocket(): Socket = system.createSocket().noDelay()
+    override fun createSocket(host: String?, port: Int): Socket = system.createSocket(host, port).noDelay()
+    override fun createSocket(host: String?, port: Int, localHost: InetAddress?, localPort: Int): Socket =
+        system.createSocket(host, port, localHost, localPort).noDelay()
+    override fun createSocket(host: InetAddress?, port: Int): Socket = system.createSocket(host, port).noDelay()
+    override fun createSocket(address: InetAddress?, port: Int, localAddress: InetAddress?, localPort: Int): Socket =
+        system.createSocket(address, port, localAddress, localPort).noDelay()
 }

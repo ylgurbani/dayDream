@@ -10,7 +10,10 @@ let relay;
 let base;
 
 before(async () => {
-  relay = createRelay({ port: 0, host: '127.0.0.1', joinTimeoutMs: 300, maxMessagesPerSecond: 50 });
+  relay = createRelay({
+    port: 0, host: '127.0.0.1', joinTimeoutMs: 300, maxMessagesPerSecond: 50,
+    maxBytesPerSecond: 64 * 1024, maxBurstBytes: 256 * 1024,
+  });
   const addr = await relay.listen();
   base = `ws://127.0.0.1:${addr.port}`;
 });
@@ -127,6 +130,25 @@ test('disconnects a socket that floods messages', async () => {
   assert.equal(await needy.closed, 1008);
   helper.close();
   await helper.closed;
+});
+
+test('disconnects a socket that sends too many bytes, even in few messages', async () => {
+  const needy = await connect(ROOM, 'needy'); await needy.next();
+  const helper = await connect(ROOM, 'helper'); await helper.next(); await needy.next();
+  // Well under the message limit, but 400KB at once is past the 256KB burst allowance.
+  for (let i = 0; i < 4; i++) needy.send(Buffer.alloc(100 * 1024, i));
+  assert.equal(await needy.closed, 1008);
+  helper.close();
+  await helper.closed;
+});
+
+test('allows an ordinary video-sized stream well within the byte allowance', async () => {
+  const needy = await connect(ROOM, 'needy'); await needy.next();
+  const helper = await connect(ROOM, 'helper'); await helper.next(); await needy.next();
+  for (let i = 0; i < 10; i++) needy.send(Buffer.alloc(8 * 1024, i)); // 80KB: inside the burst
+  for (let i = 0; i < 10; i++) assert.equal((await helper.next()).binary.length, 8 * 1024);
+  needy.close(); helper.close();
+  await Promise.all([needy.closed, helper.closed]);
 });
 
 test('serves the pairing landing page without caching or referrer leaks', async () => {

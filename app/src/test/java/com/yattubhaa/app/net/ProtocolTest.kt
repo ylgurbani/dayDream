@@ -76,7 +76,10 @@ class ProtocolTest {
         assertNull(Protocol.parse(byteArrayOf(4, 0)))            // request with a payload
         assertNull(Protocol.parse(byteArrayOf(6, 99)))           // unknown control state
         assertNull(Protocol.parse(byteArrayOf(10, 99)))          // unknown nav action
-        assertNull(Protocol.parse(byteArrayOf(12, 99)))          // unknown connection quality
+        assertNull(Protocol.parse(byteArrayOf(12, 0)))           // retired CONNECTION_QUALITY
+        assertNull(Protocol.parse(byteArrayOf(1, 1, 0, 1, 0, 1, 9))) // retired VIDEO_CHUNK
+        assertNull(Protocol.parse(byteArrayOf(17, 9, 0, 0, 0, 0))) // unknown touch phase
+        assertNull(Protocol.parse(byteArrayOf(15, 0)))           // keyframe request with a payload
         assertNull(Protocol.parse(byteArrayOf(120)))             // unknown type
         val bytes = Protocol.gesturePath(twoPts, 300)
         val zeroDuration = bytes.also { it[it.size - 2] = 0; it[it.size - 1] = 0 }
@@ -92,31 +95,60 @@ class ProtocolTest {
     }
 
     @Test
-    fun videoChunkRoundTripsAndKeepsItsKeyframeFlag() {
-        val key = Protocol.parse(Protocol.videoChunk(true, 720, 1600, byteArrayOf(9, 8, 7))) as Message.VideoChunk
+    fun videoFrameRoundTripsWithItsSequenceTimestampAndCodec() {
+        val key = Protocol.parse(
+            Protocol.videoFrame(true, VideoCodec.Avc, 720, 1600, seq = 41, sentAt = -5, data = byteArrayOf(9, 8, 7)),
+        ) as Message.VideoFrame
         assertTrue(key.keyframe)
+        assertEquals(VideoCodec.Avc, key.codec)
         assertEquals(720, key.width); assertEquals(1600, key.height)
+        assertEquals(41, key.seq)
+        assertEquals("a sender clock past 2^31 ms still round-trips exactly", -5, key.sentAt)
         assertEquals(listOf<Byte>(9, 8, 7), key.data.toList())
 
-        val delta = Protocol.parse(Protocol.videoChunk(false, 720, 1600, byteArrayOf(1))) as Message.VideoChunk
+        val delta = Protocol.parse(Protocol.videoFrame(false, VideoCodec.Hevc, 544, 1208, 42, 7, byteArrayOf(1))) as Message.VideoFrame
         assertFalse(delta.keyframe)
+        assertEquals(VideoCodec.Hevc, delta.codec)
+        assertEquals(42, delta.seq)
     }
 
     @Test
-    fun videoChunkRejectsZeroDimensionsAndEmptyData() {
-        assertNull(Protocol.parse(Protocol.videoChunk(true, 0, 100, byteArrayOf(1))))
-        assertNull(Protocol.parse(Protocol.videoChunk(true, 100, 100, byteArrayOf())))
+    fun videoFrameRejectsZeroDimensionsAndEmptyData() {
+        assertNull(Protocol.parse(Protocol.videoFrame(true, VideoCodec.Avc, 0, 100, 1, 1, byteArrayOf(1))))
+        assertNull(Protocol.parse(Protocol.videoFrame(true, VideoCodec.Avc, 100, 100, 1, 1, byteArrayOf())))
+    }
+
+    @Test
+    fun receiverReportRoundTripsAndClampsWhatDoesNotFit() {
+        val r = Message.ReceiverReport(highestSeq = 1_000_000, echoSentAt = -123, holdMs = 40, queueDelayMs = 250, lostFrames = 3)
+        assertEquals(r, Protocol.parse(Protocol.receiverReport(r)))
+        val huge = Message.ReceiverReport(1, 1, holdMs = 999_999, queueDelayMs = -4, lostFrames = 70_000)
+        assertEquals(Message.ReceiverReport(1, 1, 65535, 0, 65535), Protocol.parse(Protocol.receiverReport(huge)))
+    }
+
+    @Test
+    fun keyframeRequestDecodersAndSenderStatsRoundTrip() {
+        assertEquals(Message.KeyframeRequest, Protocol.parse(Protocol.keyframeRequest()))
+        for (set in listOf(setOf(VideoCodec.Avc), setOf(VideoCodec.Avc, VideoCodec.Hevc), emptySet())) {
+            assertEquals(Message.Decoders(set), Protocol.parse(Protocol.decoders(set)))
+        }
+        for (q in ConnectionQuality.entries) {
+            val s = Message.SenderStats(q, bitrateKbps = 1600, tier = 2, rttMs = 380, droppedFrames = 12, encoderSetup = 1)
+            assertEquals(s, Protocol.parse(Protocol.senderStats(s)))
+        }
+    }
+
+    @Test
+    fun touchRoundTripsEveryPhase() {
+        for (phase in TouchPhase.entries) {
+            val t = Protocol.parse(Protocol.touch(phase, 0.25f, 0.5f)) as Message.Touch
+            assertEquals(phase, t.phase)
+            near(0.25f, t.x); near(0.5f, t.y)
+        }
     }
 
     @Test
     fun sharingStartedRoundTrips() {
         assertEquals(Message.SharingStarted, Protocol.parse(Protocol.sharingStarted()))
-    }
-
-    @Test
-    fun connectionQualityRoundTrips() {
-        for (q in ConnectionQuality.entries) {
-            assertEquals(Message.Connection(q), Protocol.parse(Protocol.connectionQuality(q)))
-        }
     }
 }

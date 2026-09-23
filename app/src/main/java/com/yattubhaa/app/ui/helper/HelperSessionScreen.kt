@@ -22,6 +22,7 @@ fun HelperSessionScreen(onExit: (wrongCode: Boolean) -> Unit) {
         return
     }
     val state by session.state.collectAsState()
+    val stats by session.videoStats.collectAsState()
     val leave = { SessionHub.endHelper(); onExit(state.wrongCode) }
 
     when (state.phase) {
@@ -56,10 +57,12 @@ fun HelperSessionScreen(onExit: (wrongCode: Boolean) -> Unit) {
                     pointer = state.pointer,
                     controlState = state.controlState,
                     connectionQuality = state.connectionQuality,
+                    stats = stats,
                     onPoint = { x, y -> session.point(x, y) },
                     onClearPointer = { session.clearPointer() },
                     onTap = { x, y -> session.tap(x, y) },
                     onGesturePath = { points, ms -> session.gesturePath(points, ms) },
+                    onTouch = { phase, x, y -> session.touch(phase, x, y) },
                     onRequestControl = { session.requestControl() },
                     onReleaseControl = { session.releaseControl() },
                     onNavigate = { session.navigate(it) },

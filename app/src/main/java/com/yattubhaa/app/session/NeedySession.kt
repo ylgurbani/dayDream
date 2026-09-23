@@ -1,9 +1,9 @@
 package com.yattubhaa.app.session
 
-import com.yattubhaa.app.net.ConnectionQuality
 import com.yattubhaa.app.net.ControlState
 import com.yattubhaa.app.net.Protocol
 import com.yattubhaa.app.net.Role
+import com.yattubhaa.app.net.VideoCodec
 import com.yattubhaa.app.pairing.PairingStore
 import com.yattubhaa.app.service.RemoteInput
 import kotlinx.coroutines.CoroutineScope
@@ -48,6 +48,21 @@ class NeedySession private constructor(pairing: PairingStore.Record, code: Strin
     /** Pointer requests from the helper, for the overlay to draw. */
     val incoming: SharedFlow<Protocol.Message> = _incoming.asSharedFlow()
 
+    /**
+     * The helper's receiver reports and keyframe requests, for the screen-sharing service. A
+     * direct callback on the connection's own thread rather than [incoming]: that flow drops
+     * messages when its buffer is full, and these must not be dropped.
+     */
+    @Volatile var videoFeedback: ((Protocol.Message) -> Unit)? = null
+
+    /** Called when the secure channel comes back after a dropped connection: anything sent
+     *  before the drop is not going to arrive now (see SendTracker.onReconnected). */
+    @Volatile var onReconnected: (() -> Unit)? = null
+
+    /** What the helper's phone says it can decode in hardware; H.264 until it says otherwise. */
+    @Volatile var helperDecoders: Set<VideoCodec> = setOf(VideoCodec.Avc)
+        private set
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var wrongTries = 0
 
@@ -82,6 +97,7 @@ class NeedySession private constructor(pairing: PairingStore.Record, code: Strin
     @Volatile var sharing = false
 
     override fun onSecured() {
+        if (_state.value.phase == NeedyPhase.Secured || sharing) onReconnected?.invoke()
         _state.value = _state.value.copy(phase = NeedyPhase.Secured, message = "")
         // Connected but never shared means nothing visible is happening on this phone, so do
         // not leave the connection open in the background.
@@ -109,11 +125,16 @@ class NeedySession private constructor(pairing: PairingStore.Record, code: Strin
                     _state.value = _state.value.copy(controlState = ControlState.Asked)
             }
             is Protocol.Message.ControlRelease -> setControl(ControlState.Off, tellPeer = false)
-            is Protocol.Message.Tap, is Protocol.Message.LongPress, is Protocol.Message.GesturePath, is Protocol.Message.Nav ->
-                applyGesture(message)
+            is Protocol.Message.Tap, is Protocol.Message.LongPress, is Protocol.Message.GesturePath,
+            is Protocol.Message.Nav, is Protocol.Message.Touch -> applyGesture(message)
+            is Protocol.Message.ReceiverReport, Protocol.Message.KeyframeRequest -> videoFeedback?.invoke(message)
+            is Protocol.Message.Decoders -> {
+                helperDecoders = message.codecs + VideoCodec.Avc
+                videoFeedback?.invoke(message)
+            }
+            is Protocol.Message.Pointer -> _incoming.tryEmit(message)
             else -> Unit
         }
-        _incoming.tryEmit(message)
     }
 
     /** The person being helped answering a control request. */
@@ -133,6 +154,8 @@ class NeedySession private constructor(pairing: PairingStore.Record, code: Strin
     private fun setControl(state: ControlState, tellPeer: Boolean) {
         if (_state.value.controlState == state) return
         _state.value = _state.value.copy(controlState = state)
+        // A finger the helper was holding down on this screen must never outlive their control.
+        if (state != ControlState.On) RemoteInput.cancelTouch()
         if (tellPeer) send(Protocol.controlStatus(state))
     }
 
@@ -180,6 +203,9 @@ class NeedySession private constructor(pairing: PairingStore.Record, code: Strin
 
     override fun onEnded(reason: String) {
         _state.value = _state.value.copy(phase = NeedyPhase.Ended, message = reason)
+        RemoteInput.cancelTouch()
+        videoFeedback = null
+        onReconnected = null
         scope.cancel()
     }
 
@@ -187,42 +213,20 @@ class NeedySession private constructor(pairing: PairingStore.Record, code: Strin
      *  silence while the actual picture is still on its way. */
     fun notifySharingStarted() = send(Protocol.sharingStarted())
 
-    /** How much of the picture is queued but not yet actually out the door — the same signal
-     *  [ScreenShareService]'s bitrate adaptation and connection-quality reporting are both
-     *  built on, so both react to the one real thing they can measure about the connection. */
+    /** How much of the picture is queued on this phone but not yet actually sent. */
     fun outgoingBacklogBytes(): Long = backlogBytes()
 
-    fun sendConnectionQuality(quality: ConnectionQuality) = send(Protocol.connectionQuality(quality))
+    fun sendStats(stats: Protocol.Message.SenderStats) = send(Protocol.senderStats(stats))
 
-    /**
-     * Drops the chunk if the connection is behind, so a slow link catches up instead of building
-     * an ever-growing delay — but a keyframe gets a much larger allowance than a delta frame
-     * before it is dropped, not the same one. A dropped delta frame is meant to be a temporary,
-     * self-healing glitch, healed by the next keyframe — but on a genuinely, persistently
-     * congested connection (found on a real link, not just a brief blip: two phones on opposite
-     * sides of the world, one on a slow mobile connection), the backlog can stay high enough for
-     * long enough that a keyframe subject to the very same threshold as everything else gets
-     * dropped too, and with it the only way the picture was ever going to recover — reported as
-     * corruption that never clears, and a picture that stops updating even once the backlog would
-     * otherwise have let a smaller delta frame through. Letting keyframes wait in a bigger queue
-     * instead is the deliberate trade: a little more latency for one, rare, large, critical chunk,
-     * against the alternative of no way back at all.
-     */
-    fun sendVideoChunk(keyframe: Boolean, width: Int, height: Int, data: ByteArray): Boolean {
-        val limit = if (keyframe) MAX_KEYFRAME_BACKLOG_BYTES else MAX_BACKLOG_BYTES
-        return backlogBytes() < limit && send(Protocol.videoChunk(keyframe, width, height, data))
-    }
+    /** One encoded frame, already approved by the service's [com.yattubhaa.app.service.SendGate].
+     *  False if the connection refused it (mid-reconnect, say). */
+    fun sendVideoFrame(keyframe: Boolean, codec: VideoCodec, width: Int, height: Int, seq: Int, sentAt: Int, data: ByteArray): Boolean =
+        send(Protocol.videoFrame(keyframe, codec, width, height, seq, sentAt, data))
 
     private companion object {
         const val EXPIRES_AFTER_MS = 10 * 60 * 1000L
         const val MAX_WRONG_TRIES = 5
         const val IDLE_AFTER_CONNECT_MS = 3 * 60 * 1000L
-        // Tightened from an earlier 512KB: at BitrateAdapter's lowest floor, 512KB of backlog
-        // could mean the queue itself is many seconds stale before a single delta frame gets
-        // dropped to relieve it — too much added latency on a real slow link. A keyframe gets
-        // the old, larger allowance instead (see sendVideoChunk's own doc for why).
-        const val MAX_BACKLOG_BYTES = 128 * 1024L
-        const val MAX_KEYFRAME_BACKLOG_BYTES = 512 * 1024L
 
         fun newCode(): String = "%06d".format(SecureRandom().nextInt(1_000_000))
     }
