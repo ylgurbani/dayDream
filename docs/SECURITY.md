@@ -267,6 +267,56 @@ connection's own real latency, especially while it is also carrying active video
 not need to be that tight now that `ScreenShareService.onTaskRemoved` handles the common "app
 closed" case directly, without depending on this heartbeat at all.
 
+### A genuinely slow, high-latency real link: dropped keyframes, and a clock that lied
+
+The rate-limit fix above made the connection *stable*, but a real test straight after it — two
+phones genuinely on opposite sides of the world, one on a slow mobile connection through a VPN —
+found the *picture itself* was not holding up: real tearing and pixelation, and in particular a
+picture that stopped updating whenever his screen was mostly still. Traced to two more real bugs
+in the same area, both about how a *sustained*, not just brief, backlog was handled — different
+from the momentary blips the pipeline was already built to tolerate:
+
+- **A dropped keyframe is not the same as a dropped delta frame, and the code was treating them
+  the same.** `NeedySession.sendVideoChunk` drops a chunk outright once too much picture is
+  already queued but not sent — a deliberate choice, meant to bound latency rather than let a slow
+  link fall further and further behind. Dropping an ordinary delta frame this way is fine: it is a
+  self-healing glitch, healed by the next keyframe. But the *keyframe* was subject to that exact
+  same threshold, with nothing giving it any more priority than an ordinary frame — so on a
+  connection persistently slow enough to sit above that threshold (not just occasionally, briefly
+  over it), the one thing that was ever going to fix the picture could itself keep getting dropped,
+  with nothing to take its place. Fixed: a keyframe now gets a much larger allowance than a delta
+  frame before it is dropped (the delta frame's own threshold was tightened at the same time, to
+  keep latency down now that it is not also trying to protect keyframes).
+- **The clock deciding "has anything actually reached him lately" was being reset by attempts, not
+  successes.** `ScreenShareService` tracks when a chunk was last sent so it knows when to fall back
+  to resending a cached keyframe — but that clock was being updated the moment a send was
+  *attempted*, before its result was even checked. A phone is essentially never perfectly still (a
+  status bar, some system animation), so on a persistently congested link, ordinary attempts kept
+  resetting the clock every time, even while every single one of them was being silently dropped —
+  meaning the one mechanism whose entire job is noticing "nothing is actually getting through"
+  could be fooled into thinking everything was fine, indefinitely. Fixed: the clock now only
+  advances on an actual successful send.
+- **The bitrate adapter was backing off too gently, and its floor was not low enough.** Its
+  decrease factor was gentler than ordinary TCP-style congestion control, taking around ten
+  seconds of sustained congestion to reach even its old floor — ten seconds of asking an already
+  struggling connection for more than it could carry. Tightened to halve on congestion (standard
+  AIMD), and the floor itself lowered, since the old one still was not low enough for what a real
+  bad connection turned out to need.
+
+**Honestly caveated, not just asserted:** the pure decision logic behind all of this is unit
+tested. Live verification was attempted by throttling an emulator's simulated network to a
+genuinely poor connection (as low as 120kbps, well under the new floor, with 300-400ms of added
+latency) while actively scrolling on the needy side, and the picture stayed clean throughout at
+every level tried — but that test turned out not to prove what it looked like it proved: `ping`
+to the relay showed sub-millisecond latency throughout, regardless of what the emulator's network
+throttle was set to, because `10.0.2.2` (the special address an emulator uses to reach its own
+host machine) is not actually subject to the emulator's simulated radio characteristics — it is a
+direct, un-throttled hairpin route. So while the *reasoning* behind these fixes is sound (each one
+traces a real, confirmed defect in the exact code that was checked, not a guess), and the
+*pure logic* is tested, the actual behaviour under real constrained bandwidth has not been
+verified live — only reasoned about and unit tested. The next real test, the way the bug that
+prompted this section was itself found, is the one that will actually confirm it.
+
 ## Known limitation: the ring can look briefly stale in the picture itself
 
 The Stop button, banner and pointer ring are real content drawn on his screen, so they are part of
@@ -296,15 +346,18 @@ architecture, so it is recorded here as expected rather than confirmed.
   this app installed and idle, to the overlay permission being granted, or to an overlay showing,
   can only be found out on his actual phone. Some banking apps ignore touches or warn while any
   overlay is drawn over them.
-- Tested only on Android 16 emulators (two instances). Not yet on a real phone, an older
-  Motorola, or Android 14/15.
-- **The video pipeline's actual latency has not been measured, only reasoned about.** Two
-  emulators on the same machine say nothing reliable about real network conditions, real encode
-  time on real (not emulated) video hardware, or how a real phone's thermal/power state affects a
-  sustained encode. What was verified is correctness — the picture, pointer ring, and remote tap
-  and swipe all work through the new pipeline, checked by watching the actual bytes the encoder
-  produced and the decoder consumed, not just by eye — not that it is fast on a real phone over a
-  real connection.
+- Tested on two Android 16 emulators, and since on two real phones over a real long-distance
+  connection (one on a VPN in Bhutan, one on UK cellular data) — not yet on an older Motorola, or
+  Android 14/15.
+- **The video pipeline's exact latency has still not been measured, only reasoned about and
+  partly observed.** The real long-distance test above showed the connection itself staying
+  stable and the picture eventually catching up, but gave no precise number, and the
+  congestion-handling fixes it prompted (see above) have only been unit tested and reasoned about
+  since — an attempt to verify them live under a genuinely throttled connection found the test
+  itself was not throttling the traffic that mattered (see that section), so they remain unproven
+  under real constrained bandwidth specifically, as opposed to correctness in general, which is
+  checked by watching the actual bytes the encoder produced and the decoder consumed, not just by
+  eye.
 - The relay's `/join` page (which hands a tapped link to the app) is tested only as a served page,
   not through a real browser. The app's side of that hand-off was tested by sending the same
   `yattubhaa://pair?...` link directly.

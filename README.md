@@ -19,13 +19,17 @@ the grandad phone at 200% font.
 Screen sharing is a live H.264 video stream (hardware encode and decode via `MediaCodec`), not a
 series of still pictures — see "How the picture gets to the helper" in
 [docs/SECURITY.md](docs/SECURITY.md) for how that works and the real bugs found building it,
-including one found only once two real phones tried it genuinely far apart: the encoder had no
-cap on its own output rate, and the pointer ring's own animation could push it past the relay's
+including two found only once two real phones tried it genuinely far apart. First: the encoder had
+no cap on its own output rate, and the pointer ring's own animation could push it past the relay's
 message-rate limit, closing the connection almost every time the helper pointed at something —
 fixed with `FrameRateLimiter`, verified by deliberately hammering the pointer for half a minute.
-Its actual latency on a real phone over a real connection has otherwise not been measured; what
-has been verified on two emulators is that the picture, pointer ring, and remote tap and swipe are
-all correct through it.
+Second, on the next real long-distance test after that fix (a VPN connection in Bhutan to UK
+cellular data): the connection itself now held up, but the picture showed real tearing and
+pixelation, and stopped updating when his screen was mostly still — traced to keyframes being
+dropped by the same congestion logic meant to protect delta frames only, and a staleness clock
+that was reset by attempts rather than successes. Fixed, but **not yet verified live** — an
+attempt to test it under a deliberately throttled connection found the test itself was not
+actually throttling the traffic that mattered; see docs/SECURITY.md for the honest account of why.
 
 The bitrate adapts live to how the connection is actually coping (lower under real congestion,
 higher once it clears), and the helper sees a small Good/Fair/Poor indicator built from the same
@@ -49,7 +53,7 @@ docs/          security and design notes
 
 ```bash
 export JAVA_HOME=/opt/homebrew/opt/openjdk@23/libexec/openjdk.jdk/Contents/Home
-./gradlew assembleDebug testDebugUnitTest      # app + 58 unit tests
+./gradlew assembleDebug testDebugUnitTest      # app + 59 unit tests
 cd relay-server && npm install && npm test     # 10 relay tests
 ```
 

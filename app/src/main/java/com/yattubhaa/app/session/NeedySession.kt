@@ -194,18 +194,35 @@ class NeedySession private constructor(pairing: PairingStore.Record, code: Strin
 
     fun sendConnectionQuality(quality: ConnectionQuality) = send(Protocol.connectionQuality(quality))
 
-    /** Drops the chunk if the connection is behind, so a slow link catches up instead of
-     *  building an ever-growing delay. Dropping a keyframe or a delta frame mid-stream can
-     *  leave the picture briefly corrupted on his phone; it self-heals at the next keyframe,
-     *  requested at least every couple of seconds, so any glitch is bounded, not permanent. */
-    fun sendVideoChunk(keyframe: Boolean, width: Int, height: Int, data: ByteArray): Boolean =
-        backlogBytes() < MAX_BACKLOG_BYTES && send(Protocol.videoChunk(keyframe, width, height, data))
+    /**
+     * Drops the chunk if the connection is behind, so a slow link catches up instead of building
+     * an ever-growing delay — but a keyframe gets a much larger allowance than a delta frame
+     * before it is dropped, not the same one. A dropped delta frame is meant to be a temporary,
+     * self-healing glitch, healed by the next keyframe — but on a genuinely, persistently
+     * congested connection (found on a real link, not just a brief blip: two phones on opposite
+     * sides of the world, one on a slow mobile connection), the backlog can stay high enough for
+     * long enough that a keyframe subject to the very same threshold as everything else gets
+     * dropped too, and with it the only way the picture was ever going to recover — reported as
+     * corruption that never clears, and a picture that stops updating even once the backlog would
+     * otherwise have let a smaller delta frame through. Letting keyframes wait in a bigger queue
+     * instead is the deliberate trade: a little more latency for one, rare, large, critical chunk,
+     * against the alternative of no way back at all.
+     */
+    fun sendVideoChunk(keyframe: Boolean, width: Int, height: Int, data: ByteArray): Boolean {
+        val limit = if (keyframe) MAX_KEYFRAME_BACKLOG_BYTES else MAX_BACKLOG_BYTES
+        return backlogBytes() < limit && send(Protocol.videoChunk(keyframe, width, height, data))
+    }
 
     private companion object {
         const val EXPIRES_AFTER_MS = 10 * 60 * 1000L
         const val MAX_WRONG_TRIES = 5
         const val IDLE_AFTER_CONNECT_MS = 3 * 60 * 1000L
-        const val MAX_BACKLOG_BYTES = 512 * 1024L
+        // Tightened from an earlier 512KB: at BitrateAdapter's lowest floor, 512KB of backlog
+        // could mean the queue itself is many seconds stale before a single delta frame gets
+        // dropped to relieve it — too much added latency on a real slow link. A keyframe gets
+        // the old, larger allowance instead (see sendVideoChunk's own doc for why).
+        const val MAX_BACKLOG_BYTES = 128 * 1024L
+        const val MAX_KEYFRAME_BACKLOG_BYTES = 512 * 1024L
 
         fun newCode(): String = "%06d".format(SecureRandom().nextInt(1_000_000))
     }

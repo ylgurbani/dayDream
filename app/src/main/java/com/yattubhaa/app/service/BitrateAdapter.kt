@@ -65,13 +65,27 @@ class BitrateAdapter(
 
     private companion object {
         const val START_BITRATE = 1_600_000
-        const val MIN_BITRATE = 400_000
+        // Lowered from an earlier 400kbps after a real test — two phones genuinely on opposite
+        // sides of the world, one on a slow mobile connection — showed visible tearing and
+        // pixelation even once the adapter had reached its old floor: that floor still was not
+        // low enough for a genuinely constrained real link. Still enough for legible text and
+        // icons, the actual point of this app, even if motion looks rough at the bottom of the
+        // range.
+        const val MIN_BITRATE = 250_000
         const val MAX_BITRATE = 2_500_000
-        const val DECREASE_FACTOR = 0.7
+        // Halves on congestion rather than the earlier, gentler 0.7x — ordinary TCP-style AIMD,
+        // and found to matter in practice: the gentler factor took roughly five congested samples
+        // (about ten seconds, at how often this is sampled) to reach even the old floor, ten
+        // seconds of a connection that was already struggling being asked for more than it could
+        // carry. Recovery afterwards stays cautious and slow on purpose (see onSample) — this
+        // only changes how fast it backs off, not how fast it climbs back.
+        const val DECREASE_FACTOR = 0.5
         const val INCREASE_STEP = 200_000
-        // Roughly one keyframe's worth queued and not yet out the door: a real sign the link
-        // cannot keep up right now, not just an ordinarily large frame passing through.
-        const val CONGESTED_BYTES = 150_000L
+        // Deliberately well under NeedySession's own MAX_BACKLOG_BYTES (the point past which a
+        // delta frame is dropped outright): this should back the bitrate off in time to avoid
+        // most of those drops actually happening, not just notice congestion once they already
+        // are.
+        const val CONGESTED_BYTES = 64_000L
         const val GOOD_SAMPLES_TO_INCREASE = 3
     }
 }

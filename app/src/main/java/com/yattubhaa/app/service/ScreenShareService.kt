@@ -172,14 +172,19 @@ class ScreenShareService : Service() {
         // to encode. Resending the last keyframe periodically means a freshly connected or
         // reconnected helper — and one who missed a chunk to a network blip — is never left
         // looking at nothing for long, without needing to hook into presence events to do it.
+        // This is also the recovery path on a persistently congested real connection, which is
+        // exactly why lastSentAt (both here and in onChunk) only ever advances on an actual
+        // successful send, not a mere attempt: a phone is rarely perfectly still (a status bar,
+        // some system animation), so if an ordinary, silently-dropped attempt were enough to
+        // reset this clock, a genuinely stuck connection could look "recently active" forever,
+        // and this safety net would never fire when it was needed most.
         handler.postDelayed(object : Runnable {
             override fun run() {
                 val jpeg = lastKeyframe
                 val now = SystemClock.elapsedRealtime()
                 if (jpeg != null && now - lastSentAt >= KEEPALIVE_MS) {
                     val (kw, kh) = lastKeyframeSize
-                    lastSentAt = now
-                    session.sendVideoChunk(true, kw, kh, jpeg)
+                    if (session.sendVideoChunk(true, kw, kh, jpeg)) lastSentAt = now
                 }
                 handler.postDelayed(this, KEEPALIVE_MS)
             }
@@ -216,8 +221,8 @@ class ScreenShareService : Service() {
 
     private fun onChunk(session: NeedySession, keyframe: Boolean, w: Int, h: Int, bytes: ByteArray) {
         if (keyframe) { lastKeyframe = bytes; lastKeyframeSize = w to h }
-        lastSentAt = SystemClock.elapsedRealtime()
-        session.sendVideoChunk(keyframe, w, h, bytes)
+        // Only a genuine success moves this clock — see the keepalive Runnable's own comment.
+        if (session.sendVideoChunk(keyframe, w, h, bytes)) lastSentAt = SystemClock.elapsedRealtime()
     }
 
     /** Keeps what is on his screen in step with whether the helper may tap for him. */

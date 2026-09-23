@@ -31,7 +31,17 @@ class BitrateAdapterTest {
     @Test
     fun repeatedCongestionNeverDropsBelowTheFloor() {
         repeat(20) { adapter.onSample(500_000) }
-        assertEquals(400_000, adapter.bitrate)
+        assertEquals(250_000, adapter.bitrate)
+    }
+
+    @Test
+    fun congestionReachesTheFloorQuickly() {
+        // Halving on every congested sample should reach the floor in a handful of samples, not
+        // the roughly-five-sample crawl the earlier, gentler decrease factor needed — the whole
+        // point of the more aggressive decrease is not asking a struggling connection for more
+        // than it can carry for as short a time as possible.
+        repeat(3) { adapter.onSample(500_000) }
+        assertEquals(250_000, adapter.bitrate)
     }
 
     @Test
