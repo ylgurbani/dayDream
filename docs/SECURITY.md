@@ -156,6 +156,17 @@ Settings.
   every 0.75 seconds; and if drag steps pile up behind anything, the finger goes straight to the
   newest position rather than replaying the backlog. The helper's stats overlay now shows how many
   steps were carried out, how many failed or were cut short by Android, and the slowest step.
+  The next real test's overlay then showed what was actually happening: "cut short 2, failed 158"
+  — Android had twice cancelled a held drag part-way, and every later step of each of those
+  drags was silently ignored, leaving his launcher with an icon floating mid-drag until the next
+  tap. Android cancels an injected drag on any real touch on his screen, and also whenever it
+  rebuilds the machinery that injects these touches, which it does when accessibility settings
+  change — reproduced on an emulator by switching magnification on mid-drag — and plausibly a few
+  times while settling just after the service is switched on (the real test saw it only in the
+  first couple of drags). Now, if the helper's finger is still moving 0.3 seconds after such a
+  cut (time for a brief touch of his own to finish undisturbed), the finger is pressed again
+  where the helper's is and carries on, which also clears anything left frozen. Verified with the
+  magnification switch: one drag cut short, resumed, no steps lost, both screens normal after.
 - The service does not read what is on the screen. It declares the ability to see windows only so it
   can read those package names. Android's own "full control" warning uses generic wording that
   sounds broader than that.
@@ -343,10 +354,17 @@ that mattered on a slow link.
   emulators** (see "How this was tested" above). Real phones, a real mobile network, and hardware
   H.265 are all still to be tried. The helper's stats overlay is there so that test can say what
   actually happened.
-- **The drag freeze from the Bhutan test was not reproduced on emulators** — every drag there
-  worked — so the changes above are aimed at the likeliest cause, not a confirmed one. The
-  helper's stats overlay ("input: ... steps · failed · cut short · slowest") is there to show what
-  actually happens on the next real test.
+- **How a real launcher reacts to a resumed drag is untested.** On the emulator's launcher a cut
+  drag drops the icon back where it started, and the resumed press carries on as an ordinary
+  swipe; on the phone in the real test the icon was left floating, which the resumed press should
+  release. The stats overlay's "drags cut short, resumed" counts show whether it happened.
+- **A still screen may send no frames on some phones.** A real test's overlay showed 0 frames a
+  second while his phone's screen was still, using H.265. The emulators keep sending about ten
+  a second when still (the encoder is asked to repeat the last frame), in plain sharing and in
+  remote control alike, so that phone's H.265 encoder may be ignoring the request — harmless for
+  what is shown, but a still picture then never sharpens, and a keyframe asked for after a lost
+  frame waits until the screen next changes. Not yet confirmed; an attempt to force frames by
+  redrawing the invisible overlay did not produce any, and was removed rather than kept.
 - **Press, hold and drag, rotation, and the new Allow/Settings logic were tested on emulators
   only**: an app icon was picked up and moved on his home screen from the helper's picture, a hold
   without moving opened the icon's menu (a long-press), taps landed correctly in landscape, and

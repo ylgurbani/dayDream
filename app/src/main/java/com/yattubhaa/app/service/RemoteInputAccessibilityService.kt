@@ -6,6 +6,7 @@ import android.content.Intent
 import android.graphics.Path
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.view.ViewConfiguration
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityWindowInfo
@@ -33,6 +34,8 @@ class RemoteInputAccessibilityService : AccessibilityService(), RemoteInputTarge
     private var heldStroke: GestureDescription.StrokeDescription? = null
     private var heldX = 0f
     private var heldY = 0f
+    /** When Android last cut the helper's held finger short mid-drag, if the drag is still on. */
+    private var cutShortAt: Long? = null
     private val main = Handler(Looper.getMainLooper())
     private val liftIfAbandoned = Runnable { cancelTouch() }
 
@@ -107,21 +110,45 @@ class RemoteInputAccessibilityService : AccessibilityService(), RemoteInputTarge
      * may have lengthened in accessibility settings), so the item underneath is picked up; the
      * moves that follow are queued straight after it. If the helper's connection goes quiet
      * mid-drag, the finger is lifted on its own after a few seconds rather than left pressed.
+     *
+     * Android can also cut a held drag short itself: any real touch on his screen does, and so
+     * does Android rebuilding the machinery that injects these touches, which it can do a few
+     * times while settling just after the service is switched on. A real test showed the result
+     * on one phone's launcher: the icon left floating mid-drag, both phones apparently frozen,
+     * until the next separate tap — because every later step of that drag was then ignored. Now,
+     * if the helper's finger is still moving once [RESUME_AFTER_MS] has passed (long enough for a
+     * brief touch of his own to finish undisturbed), the finger is pressed again where the
+     * helper's now is and carries on from there. That also clears whatever was left frozen.
      */
     @Synchronized
     override fun touch(phase: TouchPhase, x: Float, y: Float): Boolean {
         val (px, py) = toPixels(x, y)
         val stroke = when (phase) {
             TouchPhase.Down -> {
+                cutShortAt = null
                 heldStroke?.let { liftAt(it) }
                 val holdMs = ViewConfiguration.getLongPressTimeout() + LONG_PRESS_MARGIN_MS
                 GestureDescription.StrokeDescription(Path().apply { moveTo(px, py) }, 0, holdMs, true)
             }
             TouchPhase.Move, TouchPhase.Up -> {
-                val previous = heldStroke ?: return false
-                // Must start exactly where the last step ended, or Android refuses to continue it.
-                val path = Path().apply { moveTo(heldX, heldY); lineTo(px, py) }
-                previous.continueStroke(path, 0, STEP_MS, phase == TouchPhase.Move)
+                val previous = heldStroke
+                if (previous == null) {
+                    // Android cut this drag short while the helper's finger is still going; see
+                    // the note on resuming below. Anything else (no drag at all) is a real failure.
+                    val cut = cutShortAt ?: return false
+                    if (phase == TouchPhase.Up) {
+                        cutShortAt = null
+                        return true // nothing left pressed to lift
+                    }
+                    if (SystemClock.uptimeMillis() - cut < RESUME_AFTER_MS) return true
+                    cutShortAt = null
+                    RemoteInput.onDragResumed()
+                    GestureDescription.StrokeDescription(Path().apply { moveTo(px, py) }, 0, STEP_MS, true)
+                } else {
+                    // Must start exactly where the last step ended, or Android refuses to continue it.
+                    val path = Path().apply { moveTo(heldX, heldY); lineTo(px, py) }
+                    previous.continueStroke(path, 0, STEP_MS, phase == TouchPhase.Move)
+                }
             }
         }
         main.removeCallbacks(liftIfAbandoned)
@@ -140,6 +167,7 @@ class RemoteInputAccessibilityService : AccessibilityService(), RemoteInputTarge
                 synchronized(this@RemoteInputAccessibilityService) {
                     if (heldStroke === stroke) {
                         heldStroke = null
+                        cutShortAt = SystemClock.uptimeMillis()
                         RemoteInput.onStepCancelled()
                     }
                 }
@@ -149,6 +177,7 @@ class RemoteInputAccessibilityService : AccessibilityService(), RemoteInputTarge
 
     @Synchronized
     override fun cancelTouch() {
+        cutShortAt = null
         main.removeCallbacks(liftIfAbandoned)
         heldStroke?.let { liftAt(it) }
         heldStroke = null
@@ -190,5 +219,6 @@ class RemoteInputAccessibilityService : AccessibilityService(), RemoteInputTarge
         const val LONG_PRESS_MARGIN_MS = 200L
         const val STEP_MS = 40L // how often the helper's phone sends a step of a held drag
         const val ABANDONED_AFTER_MS = 5000L
+        const val RESUME_AFTER_MS = 300L
     }
 }

@@ -404,6 +404,7 @@ class ScreenShareService : Service() {
                 inputFailed = failed,
                 inputSlowestMs = slowest,
                 inputCancelled = RemoteInput.cancelledSteps,
+                inputResumed = RemoteInput.resumedDrags,
             ),
         )
     }

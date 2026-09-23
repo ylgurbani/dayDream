@@ -278,8 +278,8 @@ private fun statsText(s: VideoStats): String = buildString {
         append("\nsent: tier ${it.tier} · ${it.bitrateKbps} kbps · rtt ${it.rttMs} ms · dropped ${it.droppedFrames}")
         if (it.encoderSetup > 0) append(" · setup ${it.encoderSetup}")
         if (it.inputSteps > 0) {
-            append("\ninput: ${it.inputSteps} steps · failed ${it.inputFailed} · cut short ${it.inputCancelled}")
-            append(" · slowest ${it.inputSlowestMs} ms")
+            append("\ninput: ${it.inputSteps} steps · failed ${it.inputFailed} · slowest ${it.inputSlowestMs} ms")
+            append(" · drags cut short ${it.inputCancelled}, resumed ${it.inputResumed}")
         }
     }
 }

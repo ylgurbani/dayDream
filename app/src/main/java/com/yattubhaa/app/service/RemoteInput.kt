@@ -61,6 +61,15 @@ object RemoteInput {
         cancelled.incrementAndGet()
     }
 
+    private val resumed = AtomicInteger()
+
+    /** Drags carried on after Android cut them short, since the app started. */
+    val resumedDrags: Int get() = resumed.get()
+
+    fun onDragResumed() {
+        resumed.incrementAndGet()
+    }
+
     fun attach(t: RemoteInputTarget) {
         checkedAt = null
         windowsChanged = true
