@@ -354,17 +354,15 @@ that mattered on a slow link.
   emulators** (see "How this was tested" above). Real phones, a real mobile network, and hardware
   H.265 are all still to be tried. The helper's stats overlay is there so that test can say what
   actually happened.
-- **How a real launcher reacts to a resumed drag is untested.** On the emulator's launcher a cut
-  drag drops the icon back where it started, and the resumed press carries on as an ordinary
-  swipe; on the phone in the real test the icon was left floating, which the resumed press should
-  release. The stats overlay's "drags cut short, resumed" counts show whether it happened.
-- **A still screen may send no frames on some phones.** A real test's overlay showed 0 frames a
-  second while his phone's screen was still, using H.265. The emulators keep sending about ten
-  a second when still (the encoder is asked to repeat the last frame), in plain sharing and in
-  remote control alike, so that phone's H.265 encoder may be ignoring the request — harmless for
-  what is shown, but a still picture then never sharpens, and a keyframe asked for after a lost
-  frame waits until the screen next changes. Not yet confirmed; an attempt to force frames by
-  redrawing the invisible overlay did not produce any, and was removed rather than kept.
+- **Resuming a cut-short drag is not guaranteed on every launcher.** On the emulator's launcher a
+  cut drag drops the icon back where it started, and the resumed press carries on as an ordinary
+  swipe. On a real phone, the next test after this was added saw drags resume smoothly, with one
+  exception in a long session. The stats overlay's "drags cut short, resumed" counts show what
+  happened in any future case.
+- **A still screen and H.265 on a real phone:** one real test's overlay showed 0 frames a second
+  at the moment a drag froze, which looked like the phone's H.265 encoder ignoring the request to
+  repeat the last frame on a still screen. The next test showed about 7 frames a second in the
+  same situation, so it was specific to that moment, not the encoder.
 - **Press, hold and drag, rotation, and the new Allow/Settings logic were tested on emulators
   only**: an app icon was picked up and moved on his home screen from the helper's picture, a hold
   without moving opened the icon's menu (a long-press), taps landed correctly in landscape, and
