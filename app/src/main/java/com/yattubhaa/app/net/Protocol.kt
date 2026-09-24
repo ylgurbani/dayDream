@@ -51,7 +51,7 @@ enum class TouchPhase(val wire: Byte) { Down(0), Move(1), Up(2) }
  *   SENDER_STATS   needy -> helper   quality (1) | target kbps (2) | quality tier (1) | round trip
  *                                    ms (2) | frames dropped (2) | encoder setup (1) | input steps
  *                                    (2) | input steps failed (2) | slowest input step ms (2) |
- *                                    drag steps cut short (2), every 2s
+ *                                    drags cut short (2) | drags resumed (2), every 2s
  *   SHARING_STARTED needy -> helper  sharing has begun; the picture is on its way but has not
  *                                    necessarily arrived yet, so the helper has something to show
  *                                    other than silence while it does
@@ -93,7 +93,7 @@ object Protocol {
     private const val TOUCH: Byte = 17
     private const val SENDER_STATS: Byte = 18
     private const val VIDEO_HEADER = 1 + 1 + 2 + 2 + 4 + 4
-    private const val SENDER_STATS_LEN = 19
+    private const val SENDER_STATS_LEN = 21
     private const val U16_MAX = 0xFFFF
     private const val SCALE = 10000
     private const val CLEAR = 0xFFFF
@@ -139,6 +139,7 @@ object Protocol {
             val inputFailed: Int = 0,
             val inputSlowestMs: Int = 0,
             val inputCancelled: Int = 0,
+            val inputResumed: Int = 0,
         ) : Message
         /** Sharing has begun; the picture itself may still be a moment away. */
         data object SharingStarted : Message
@@ -187,7 +188,7 @@ object Protocol {
         .putShort(u16(s.bitrateKbps)).put(s.tier.coerceIn(0, 127).toByte())
         .putShort(u16(s.rttMs)).putShort(u16(s.droppedFrames)).put(s.encoderSetup.coerceIn(0, 127).toByte())
         .putShort(u16(s.inputSteps)).putShort(u16(s.inputFailed))
-        .putShort(u16(s.inputSlowestMs)).putShort(u16(s.inputCancelled))
+        .putShort(u16(s.inputSlowestMs)).putShort(u16(s.inputCancelled)).putShort(u16(s.inputResumed))
         .array()
 
     fun sharingStarted(): ByteArray = byteArrayOf(SHARING_STARTED)
@@ -287,6 +288,7 @@ object Protocol {
                     inputFailed = buf.short.toInt() and 0xFFFF,
                     inputSlowestMs = buf.short.toInt() and 0xFFFF,
                     inputCancelled = buf.short.toInt() and 0xFFFF,
+                    inputResumed = buf.short.toInt() and 0xFFFF,
                 )
             }
             SHARING_STARTED -> if (bytes.size == 1) Message.SharingStarted else null
