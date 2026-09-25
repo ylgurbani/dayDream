@@ -79,17 +79,20 @@ To try it over a slow, laggy connection, see "Test on a slow, laggy connection" 
    [docs/SETUP-RELAY.md](docs/SETUP-RELAY.md). Where it runs matters: for India and the UK,
    Render's Frankfurt region rather than its default, Oregon (a region cannot be changed later).
 2. **Get the app onto his phone.** This is the open question: a sideloaded APK needs him (or you,
-   guiding him) to allow "install unknown apps". Play Store testing tracks are easier for him but
-   need a developer account. The debug APK works over `wss://` but is debug-signed.
+   guiding him) to allow "install unknown apps", get past a Play Protect scan prompt, and, once per
+   install, allow "restricted settings" before remote tap and swipe can be switched on (see
+   docs/SECURITY.md, "Not verified"). Play Store testing tracks are easier for him but need a
+   developer account. The debug APK works over `wss://` but is debug-signed.
 3. **First call, once:** on your phone make the link with your `wss://` address and send it over
    WhatsApp. He taps it and says Yes. Then have him tap **Get Help > Let you see my screen**; it
    sends him to Android's "Display over other apps" list, where he switches on Yattu Bhaa, so
    this is easiest done together, once.
 4. **After that:** he taps Get Help and reads you the number; you type it in.
 5. **Remote tap and swipe (optional):** in the session, tap **Ask to tap for them**. He gets a big
-   Allow / Not now question. The first time only, Android sends him to its Accessibility list to switch
+   Allow / Not now question. Each time, Android then sends him to its Accessibility list to switch
    on Yattu Bhaa (Android shows a "full control" warning; talk him through it). Afterwards you can tap
-   and swipe on the mirrored screen, and use Back / Home / Recent. A **Turn off remote control**
-   button on his home screen switches it off again. See docs/SECURITY.md before using it.
+   and swipe on the mirrored screen, and use Back / Home / Recent (Back twice brings him out of
+   Settings). It is switched off again automatically when the session ends, because some banking
+   apps refuse to open while any app has it switched on. See docs/SECURITY.md before using it.
 
 See also [docs/SETUP-RELAY.md](docs/SETUP-RELAY.md) for setting up the relay in plain terms.

@@ -23,6 +23,7 @@ private class FakeTarget(var visible: List<String>? = listOf("com.android.chrome
     override fun touch(phase: TouchPhase, x: Float, y: Float): Boolean { log += "touch:$phase"; return succeed }
     override fun cancelTouch() { log += "cancel" }
     override fun navigate(action: NavAction): Boolean { log += "nav:$action"; return succeed }
+    override fun switchOff() { log += "off" }
 }
 
 class RemoteInputTest {

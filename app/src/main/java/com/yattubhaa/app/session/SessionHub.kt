@@ -2,6 +2,7 @@ package com.yattubhaa.app.session
 
 import android.content.Context
 import com.yattubhaa.app.pairing.PairingStore
+import com.yattubhaa.app.service.ControlCapability
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -66,4 +67,8 @@ object SessionHub {
     internal fun changed() {
         _changes.update { it + 1 }
     }
+
+    /** Called by the needy session as it ends, however it ended: remote tap and swipe never
+     *  stays switched on after a session (see [ControlCapability]). */
+    internal fun needyEnded() = ControlCapability.switchOff(app)
 }

@@ -49,7 +49,9 @@ The release build type has never been built or tested (R8 rules exist only for T
   link backs up, never drops encoded frames), `SendTracker` / `ReceiveTracker` (frame numbers,
   receiver reports), `CongestionController` (bitrate and 720/544/432 quality tiers),
   `RemoteInput` + `RemoteInputAccessibilityService` (taps, swipes, press-hold-drag, banking-app
-  guard in `SecureAppPolicy`), `SessionOverlay` (Stop button, pointer ring, banner).
+  guard in `SecureAppPolicy`), `ControlCapability` (offers the accessibility service when he says
+  Allow and switches it off at every session end and app start: some banking apps refuse to open
+  while any accessibility service is on), `SessionOverlay` (Stop button, pointer ring, banner).
 - `app/.../session/` — `NeedySession`, `HelperSession`, `BaseSession` (reconnects),
   `SessionHub`, `SessionService` (foreground service so a session survives the app leaving the
   screen: newer Android cuts background apps' network after ~5 s).
@@ -74,6 +76,11 @@ The release build type has never been built or tested (R8 rules exist only for T
   makes Android cut a held drag short on purpose.
 - Pre-granting the overlay permission with `appops` hides the real settings trip; reset it to
   `default` to test that flow.
+- `adb install` skips Android's "restricted settings" and the Play Protect scan prompt that his
+  sideloaded install will get. To see them, uninstall, push the APK to `/sdcard/Download` and
+  install it from the Files app (then onboard and re-pair). The shell cannot enable or disable the
+  app's components (`pm enable` is refused), so the accessibility service can only be offered by
+  saying Allow in a session.
 
 ## Open items
 

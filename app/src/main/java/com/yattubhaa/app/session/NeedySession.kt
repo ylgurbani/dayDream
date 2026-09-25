@@ -249,6 +249,7 @@ class NeedySession private constructor(pairing: PairingStore.Record, code: Strin
     override fun onEnded(reason: String) {
         _state.value = _state.value.copy(phase = NeedyPhase.Ended, message = reason)
         RemoteInput.cancelTouch()
+        SessionHub.needyEnded()
         videoFeedback = null
         onReconnected = null
         input.shutdown()

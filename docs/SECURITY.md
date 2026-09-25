@@ -97,33 +97,57 @@ not by reasoning about it in the abstract:
 | Get Help / connected | A relay connection, and a foreground service with a "Help session ... is open" notification so the connection survives the app leaving the screen | Session ends |
 | Screen sharing | Foreground service + capture, granted per session by Android's dialog | Session ends or Stop |
 | Pointer ring | Overlay window during a session only | Session ends |
-| Remote tap/swipe (built, opt-in) | An Accessibility Service, offered after his first Yes and switched on by him in Settings once. Stays on until he taps **Turn off remote control** on his home screen. | He taps Turn off |
+| Remote tap/swipe (built, opt-in) | An Accessibility Service, offered when he says Yes and switched on by him in Settings, every session. | Session ends |
 
-Remote tap and swipe is the one piece with a **standing state**, and I tried to avoid that: Android
-will not let an app switch its own accessibility service on, and if the app switches it off between
-sessions, Android forgets that he ever turned it on (tested), so every session would need the whole
-Settings trip again. So it stays on once he has turned it on, and he gets a one-tap
-**Turn off remote control** button on his home screen (shown only while it is on). That button also
-removes it from Android's Accessibility list, with no visit to Settings. Any app that can check
-whether an accessibility service is enabled can see this state, whatever the app is called, and
-nothing here hides it.
+**Remote tap and swipe is switched off again at the end of every session**, and also hidden from
+Android's Accessibility list, so between sessions nothing on his phone has an accessibility service
+switched on. An earlier version left it on between sessions to spare him the Settings trip each
+time (Android forgets he turned it on the moment it is switched off). A real test then found that
+some banking apps refuse to open at all while *any* app has an accessibility service on, until that
+app is uninstalled or the switch is turned off: left on, it would have locked him out of his bank.
+The cost is that every session he says Allow, Android's Accessibility list opens, and he switches
+Yattu Bhaa on again and accepts Android's "full control" warning (the helper can see his screen
+throughout and talk him through it). While it is on, during a session, those same banking apps
+will still refuse to open; ending the session is what lets them open again.
 
-**Android, not just this app's own button, can take the accessibility switch away** — confirmed by
-clearing it directly rather than through "Turn off remote control", the same as if the system had
-revoked it on its own. When he next says Yes to a request, this app used to wait a few seconds and
-then just report "needs a setting" with no way to actually get to that setting, because it only
-offered the Settings trip the first time ever, never on a return visit. Fixed: tapping Allow now
-sends him to Settings whenever the switch is not actually on, first time or not — sending him there
-carries no cost any more (see below), so there is no reason left to ever leave him stuck.
+How it is switched off (`ControlCapability.switchOff`): the service switches itself off through
+Android's own call for that (`disableSelf`), and the app hides the service from the list. Either
+alone clears Android's switch (tested on an emulator: hiding it alone, after a crash, cleared the
+switch within 2 seconds of the app restarting). It runs when a session ends however it ends — his
+Stop, the helper's Stop, a dropped connection, the app swiped away — and again whenever the app
+starts, so a session cut off without ending properly (the app crashing or being killed, the phone
+restarting) cannot leave it on either: Android restarts an app whose accessibility service is on,
+and that restart switches it off. Measured on an emulator: the switch was off within 0.1 seconds of
+the helper tapping Stop, and within 2 seconds of the app being crashed deliberately mid-session.
+Force-stopping the app also switches it off (Android does that itself).
+
+The home screen's **Turn off remote control** button is now only a safety net and should never
+show: it appears only while Android's own record says the switch is on (it is re-read whenever
+that record changes). An earlier version showed it from his first Allow on, whether or not he had
+actually switched it on in Settings, or after Android had switched it off.
+
+**Found while making it switch off every session:** a service that has just been put back in
+Android's list takes a moment to appear there (1.1 to 1.4 seconds, measured on an emulator), and
+an Accessibility list opened before then leaves Yattu Bhaa out, for good, until it is closed and
+opened again. The first-ever Allow always had this race too; it just happened once and was never
+caught. Now, after he taps Allow, the app waits until Android lists the service (up to 5 seconds)
+before opening the list. It cannot open Yattu Bhaa's own switch page directly, which would save
+him a step: Android reserves that for system apps (`OPEN_ACCESSIBILITY_DETAILS_SETTINGS`).
+
+**Android, not just this app, can take the accessibility switch away** — confirmed by clearing it
+directly, the same as if the system had revoked it on its own. When he next said Yes, an earlier
+version waited a few seconds and then just reported "needs a setting" with no way to get to that
+setting, because it only offered the Settings trip the first time ever. Tapping Allow now sends him
+to Settings whenever the switch is not actually on — which, since it is switched off after every
+session, is every time.
 
 Whether the switch is on is now read from Android's own record of enabled accessibility services
 (`ControlCapability.isSwitchedOn`), not guessed from how long the service takes to connect. The
 guess got both cases wrong: the first time, he waited three seconds for a trip to Settings that
 was always going to be needed; and on an older phone slow to reconnect a service that *was*
-switched on, he could be sent to Settings for nothing. Now: switched off, he goes to Settings at
-once (measured: Android's Accessibility screen in front 0.17s after tapping Allow, on an
-emulator); switched on but still connecting, it waits for the connection and never sends him to
-Settings.
+switched on, he could be sent to Settings for nothing. Now: switched off, he goes to Settings as
+soon as Android lists the service (see above; about 1.1 seconds on an emulator); switched on but
+still connecting, it waits for the connection and never sends him to Settings.
 
 ## Remote tap and swipe: how it is contained
 
@@ -339,14 +363,23 @@ that mattered on a slow link.
   against a dummy app called "Test Bank". If he installs a finance app whose package name is not on
   the list and has no obvious word in it, taps would not be held back. Add its package name to
   `SecureAppPolicy.kt`. Screens that block screen capture already show as black to the helper.
-- **Sideloaded installs and Android's "restricted settings".** On Android 13 and up, an app installed
-  from outside a store may have its accessibility switch greyed out until you open Settings > Apps >
-  Yattu Bhaa > the three dots > **Allow restricted settings**. I could not test this (adb installs are
-  not treated that way). A Play Store testing track avoids it.
-- **Nobody has tested this against HDFC, Paytm, GPay or Kotak.** Whether any of them object to
-  this app installed and idle, to the overlay permission being granted, or to an overlay showing,
-  can only be found out on his actual phone. Some banking apps ignore touches or warn while any
-  overlay is drawn over them.
+- **Sideloaded installs and Android's "restricted settings"** — tested since on an Android 16
+  emulator by installing the APK from the Files app (adb installs are exempt, which is why earlier
+  tests never saw it). His Accessibility list shows Yattu Bhaa as "Controlled by Restricted
+  Setting", and tapping it only says "App was denied access". The way through: Settings > Apps >
+  Yattu Bhaa > the three dots (top right) > **Allow restricted settings** (the menu item only
+  appears after that "denied" message has been seen once), then switch it on as normal. Measured:
+  this is needed **once per install**. It stayed allowed through the service being switched off at
+  session end, through a second session (which showed the normal switch), and through an update
+  installed from an APK file; only uninstalling would bring it back. The emulator has no screen
+  lock; a real phone may ask for his PIN at that step. Installing from the Files app also got a
+  Google Play Protect "App scan recommended" prompt, on the first install and again on the update.
+  A Play Store testing track avoids both.
+- **Not yet tested against HDFC, Paytm, GPay or Kotak on his phone.** A real test did find banking
+  apps that refuse to open while any accessibility service is switched on, which is why it is now
+  switched off after every session (see above) — but whether his apps object to this app installed
+  and idle, to the overlay permission being granted, or to an overlay showing, can only be found out
+  on his actual phone. Some banking apps ignore touches or warn while any overlay is drawn over them.
 - Tested on two Android 16 emulators, and since on two real phones over a real long-distance
   connection (one on a VPN in Bhutan, one on UK cellular data) — not yet on an older Motorola, or
   Android 14/15.
@@ -390,8 +423,6 @@ that mattered on a slow link.
 - While Android's own Settings app is in front (including when he is sent there to switch the
   accessibility service on), Android hides every overlay, ours included; it comes back the moment
   he leaves Settings. Android's own red screen-sharing indicator stays throughout.
-- Force-stopping the app (Settings > Apps > Force stop) makes Android switch its accessibility
-  service off, so he would have to turn it on again.
 - A held drag on his phone plays back the helper's movement in steps as they arrive, so on a slow
   connection it can move in small hops rather than smoothly; it never lets go early, since his
   phone keeps the finger down between steps however long the next one takes. Quick swipes and

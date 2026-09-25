@@ -25,9 +25,9 @@
     <!-- Tier 3 (advanced, opt-in, OFF by default): accessibility-based tap/swipe injection.
          android.permission.BIND_ACCESSIBILITY_SERVICE is held by the system and granted to the
          service below when, and only when, the person on this phone turns it on themselves in
-         system Settings > Accessibility. The app never enables it on its own, and Helper mode
-         shows plainly that turning it on is a standing state some banking apps may object to
-         until it is turned back off. See docs/SECURITY.md. -->
+         system Settings > Accessibility. The app never enables it on its own, and switches it off
+         again (and hides it from that list) as every session ends: some banking apps refuse to open
+         while any app has an accessibility service on. See docs/SECURITY.md. -->
 
     <application
         android:name=".YattuBhaaApp"

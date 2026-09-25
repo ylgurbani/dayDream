@@ -22,7 +22,8 @@ import kotlin.math.roundToInt
  *
  * It never reads what is on the screen. It asks Android only which apps have a window showing (a
  * package name, nothing else), so that taps are never sent while a banking or payment app is open.
- * It is off unless the person switches it on in Settings > Accessibility.
+ * It is off unless the person switches it on in Settings > Accessibility, and it is switched off
+ * again as every session ends ([ControlCapability.switchOff]).
  */
 class RemoteInputAccessibilityService : AccessibilityService(), RemoteInputTarget {
     /** Fallback only: the last app whose window came to the front. */
@@ -64,6 +65,10 @@ class RemoteInputAccessibilityService : AccessibilityService(), RemoteInputTarge
             packages += pkg ?: return null
         }
         return packages
+    }
+
+    override fun switchOff() {
+        runCatching { disableSelf() }
     }
 
     override fun onUnbind(intent: Intent?): Boolean {

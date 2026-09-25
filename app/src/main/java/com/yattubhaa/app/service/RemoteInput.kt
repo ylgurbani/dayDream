@@ -27,6 +27,8 @@ interface RemoteInputTarget {
     /** Lifts a finger held down by [touch], if there is one. Safe to call at any time. */
     fun cancelTouch()
     fun navigate(action: NavAction): Boolean
+    /** Switches the service off in Android's own accessibility settings, as if he had. */
+    fun switchOff()
 }
 
 /**
@@ -82,6 +84,13 @@ object RemoteInput {
             target = null
             _connected.value = false
         }
+    }
+
+    /** Lifts any held finger and switches the service off, if it is connected. See [ControlCapability.switchOff]. */
+    fun switchOff() {
+        val t = target ?: return
+        t.cancelTouch()
+        t.switchOff()
     }
 
     /**

@@ -33,6 +33,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -485,7 +486,17 @@ class ScreenShareService : Service() {
             // On, or Unavailable for now — which recovers by itself the moment the service
             // connects (see NeedySession.recheckAvailability).
             session.acceptControl()
-            if (!switchedOn) ControlCapability.openAccessibilitySettings(this@ScreenShareService)
+            if (!switchedOn) {
+                // Just offered, so Android may not have added it to its Accessibility list yet,
+                // and a list opened before then leaves Yattu Bhaa out (found on an emulator).
+                val started = SystemClock.elapsedRealtime()
+                withTimeoutOrNull(LISTED_WAIT_MS) {
+                    while (!ControlCapability.isListed(this@ScreenShareService)) delay(50)
+                }
+                Log.i(TAG, "accessibility list has Yattu Bhaa after ${SystemClock.elapsedRealtime() - started}ms: " +
+                    "${ControlCapability.isListed(this@ScreenShareService)}")
+                ControlCapability.openAccessibilitySettings(this@ScreenShareService)
+            }
         }
     }
 
@@ -571,6 +582,7 @@ class ScreenShareService : Service() {
         private const val KEYFRAME_MIN_GAP_MS = 500L
         private const val MAX_ENCODER_FAILURES = 5
         private const val RECONNECT_WAIT_MS = 8000L
+        private const val LISTED_WAIT_MS = 5000L
 
         /** [resultCode] and [data] are what Android's screen-capture consent dialog returned. */
         fun start(context: Context, resultCode: Int, data: Intent) {

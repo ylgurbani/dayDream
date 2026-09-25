@@ -1,5 +1,9 @@
 package com.yattubhaa.app.ui.helpneeded
 
+import android.database.ContentObserver
+import android.os.Handler
+import android.os.Looper
+import android.provider.Settings
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -20,6 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -48,8 +53,20 @@ import com.yattubhaa.app.ui.components.ButtonKind
 @Composable
 fun HelpNeededHomeScreen(onGetHelp: () -> Unit, onOpenHelperMode: () -> Unit) {
     val context = LocalContext.current
-    var remoteControlOn by remember { mutableStateOf(ControlCapability.isOffered(context)) }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { remoteControlOn = ControlCapability.isOffered(context) }
+    // Read from Android's own record of the switch, and followed as it changes: an earlier version
+    // showed the button from the first Allow on, whether or not he had actually switched it on.
+    var remoteControlOn by remember { mutableStateOf(ControlCapability.isSwitchedOn(context)) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { remoteControlOn = ControlCapability.isSwitchedOn(context) }
+    DisposableEffect(context) {
+        val resolver = context.contentResolver
+        val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
+            override fun onChange(selfChange: Boolean) {
+                remoteControlOn = ControlCapability.isSwitchedOn(context)
+            }
+        }
+        resolver.registerContentObserver(Settings.Secure.getUriFor(Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES), false, observer)
+        onDispose { resolver.unregisterContentObserver(observer) }
+    }
 
     Column(
         modifier = Modifier.fillMaxSize().padding(24.dp),
@@ -92,16 +109,14 @@ fun HelpNeededHomeScreen(onGetHelp: () -> Unit, onOpenHelperMode: () -> Unit) {
             )
         }
 
-        // Only there while remote tap and swipe is switched on, so it can always be switched off
-        // again in one tap, without going back into Settings.
+        // Only there while remote tap and swipe is actually switched on, so it can always be
+        // switched off again in one tap, without going back into Settings. Every session already
+        // switches it off as it ends, so this is only a safety net: it should rarely, if ever, show.
         if (remoteControlOn) {
             Spacer(Modifier.height(12.dp))
             BigButton(
                 text = "Turn off remote control",
-                onClick = {
-                    ControlCapability.setOffered(context, false)
-                    remoteControlOn = false
-                },
+                onClick = { ControlCapability.switchOff(context) },
                 kind = ButtonKind.Secondary,
                 minHeight = 64.dp,
             )
