@@ -373,8 +373,22 @@ that mattered on a slow link.
   session end, through a second session (which showed the normal switch), and through an update
   installed from an APK file; only uninstalling would bring it back. The emulator has no screen
   lock; a real phone may ask for his PIN at that step. Installing from the Files app also got a
-  Google Play Protect "App scan recommended" prompt, on the first install and again on the update.
-  A Play Store testing track avoids both.
+  Google Play Protect "App scan recommended" prompt, on the first install and again on the update
+  (though not on a later fresh install, so it does not always appear).
+  Two further findings from the same emulator, tested afterwards:
+  - **"Display over other apps" is restricted too.** On a file install its switch shows
+    "Disabled", and tapping it gives the same "App was denied access". So on the very first call he
+    hits this before his screen can be shared at all, not only when remote control is first used.
+    The same one-time **Allow restricted settings** unlocks it (tested: the switch then turned on
+    normally). Only tested on Android 16: older versions may restrict fewer settings.
+  - **An adb install is exempt only until it is updated from a file.** Installed with adb, both
+    switches work normally; after an update installed from an APK file, Android records the app as
+    installed from a file and the restriction applies (tested: "App was denied access" on the
+    overlay switch). A permission already switched on before that update stays on ("Display over
+    other apps" did), but remote tap and swipe is switched on afresh every session, so it would be
+    blocked from the first file update until **Allow restricted settings** is done once. Installing
+    with adb only avoids the restriction if every later update is also installed with adb.
+  A Play Store testing track avoids all of this.
 - **Not yet tested against HDFC, Paytm, GPay or Kotak on his phone.** A real test did find banking
   apps that refuse to open while any accessibility service is switched on, which is why it is now
   switched off after every session (see above) — but whether his apps object to this app installed

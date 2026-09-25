@@ -79,14 +79,16 @@ To try it over a slow, laggy connection, see "Test on a slow, laggy connection" 
    [docs/SETUP-RELAY.md](docs/SETUP-RELAY.md). Where it runs matters: for India and the UK,
    Render's Frankfurt region rather than its default, Oregon (a region cannot be changed later).
 2. **Get the app onto his phone.** This is the open question: a sideloaded APK needs him (or you,
-   guiding him) to allow "install unknown apps", get past a Play Protect scan prompt, and, once per
-   install, allow "restricted settings" before remote tap and swipe can be switched on (see
-   docs/SECURITY.md, "Not verified"). Play Store testing tracks are easier for him but need a
-   developer account. The debug APK works over `wss://` but is debug-signed.
+   guiding him) to allow "install unknown apps", possibly get past a Play Protect scan prompt, and,
+   once per install, allow "restricted settings" (see docs/SECURITY.md, "Not verified"). Play Store
+   testing tracks are easier for him but need a developer account. The debug APK works over
+   `wss://` but is debug-signed.
 3. **First call, once:** on your phone make the link with your `wss://` address and send it over
    WhatsApp. He taps it and says Yes. Then have him tap **Get Help > Let you see my screen**; it
    sends him to Android's "Display over other apps" list, where he switches on Yattu Bhaa, so
-   this is easiest done together, once.
+   this is easiest done together, once. If the APK was installed from a file, that switch may say
+   "App was denied access": then go to Settings > Apps > Yattu Bhaa > ⋮ > **Allow restricted
+   settings**, and switch it on again. That one step also covers remote tap and swipe later.
 4. **After that:** he taps Get Help and reads you the number; you type it in.
 5. **Remote tap and swipe (optional):** in the session, tap **Ask to tap for them**. He gets a big
    Allow / Not now question. Each time, Android then sends him to its Accessibility list to switch
